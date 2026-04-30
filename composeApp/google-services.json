@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "901062092870",
+    "project_id": "sinavtakvimsistemi",
+    "storage_bucket": "sinavtakvimsistemi.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:901062092870:android:d4790ddc8caed5a5f00247",
+        "android_client_info": {
+          "package_name": "sinav.takvimsistemi2026"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGoyRxEHZ-9pXRUCaxVnMRNRXcKLiEE1c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

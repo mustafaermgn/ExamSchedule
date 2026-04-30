@@ -1,0 +1,17 @@
+.gradle
+/build
+/*/build
+*.iml
+.idea
+local.properties
+.DS_Store
+.kotlin
+/captures
+.externalNativeBuild
+.cxx
+/google-services.json
+.settings
+.project
+.classpath
+bin/
+gen/
