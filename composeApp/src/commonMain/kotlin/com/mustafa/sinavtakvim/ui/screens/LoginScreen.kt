@@ -31,8 +31,8 @@ class LoginScreen : Screen {
         val authRepository = koinInject<AuthRepository>()
         val scope = rememberCoroutineScope()
 
-        var email by remember { mutableStateOf("admin@fakulte.edu.tr") }
-        var password by remember { mutableStateOf("123456") }
+        var email by remember { mutableStateOf("") }
+        var password by remember { mutableStateOf("") }
         var role by remember { mutableStateOf(UserRole.ADMIN) }
         var isLoading by remember { mutableStateOf(false) }
         var message by remember { mutableStateOf<String?>(null) }
@@ -92,7 +92,6 @@ class LoginScreen : Screen {
                             role = role,
                             onRoleChange = { 
                                 role = it
-                                email = if (it == UserRole.ADMIN) "admin@fakulte.edu.tr" else "mert.celik@fakulte.edu.tr"
                             },
                             isLoading = isLoading,
                             message = message,
@@ -126,7 +125,6 @@ class LoginScreen : Screen {
                         role = role,
                         onRoleChange = { 
                             role = it
-                            email = if (it == UserRole.ADMIN) "admin@fakulte.edu.tr" else "mert.celik@fakulte.edu.tr"
                         },
                         isLoading = isLoading,
                         message = message,

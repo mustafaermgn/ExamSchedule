@@ -9,7 +9,8 @@ class DPSolver : ExamSolver {
     override fun solve(
         courses: List<Course>,
         rooms: List<Room>,
-        proctors: List<User>
+        proctors: List<User>,
+        slotTimes: List<String>
     ): SolverResult {
         var result = SolverResult(emptyList(), 0L, 0.0)
         val time = measureTime {
@@ -18,6 +19,7 @@ class DPSolver : ExamSolver {
                 courses = courses,
                 rooms = rooms,
                 proctors = proctors,
+                slotTimes = slotTimes,
                 selectRooms = ::findOptimalRooms
             )
         }

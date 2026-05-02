@@ -72,15 +72,28 @@ fun buildSchedulePdf(
 ): ByteArray {
     val term = exams.firstOrNull()?.academicTerm.orEmpty()
     val type = exams.firstOrNull()?.examType.orEmpty()
-    val lines = mutableListOf("Sinav Programi", "Donem: $term  Tur: $type", "Oturum: ${exams.size}", "")
-    exams.sortedWith(compareBy<Exam> { it.date }.thenBy { it.slotId }).forEach { exam ->
-        val course = courses[exam.courseId]
-        val roomNames = exam.assignments.mapNotNull { rooms[it.roomId]?.name }.joinToString(", ")
-        val proctorNames = exam.assignments.mapNotNull { users[it.proctorId]?.name }.joinToString(", ")
-        lines += "${course?.code ?: exam.courseId} - ${course?.name.orEmpty()}"
-        lines += "${examDateLabel(exam.date)} ${slotLabel(exam.slotId)} | Salon: $roomNames"
-        lines += "Gozetmen: $proctorNames | Ogrenci: ${course?.studentCount ?: 0}"
+    val lines = mutableListOf("Sinav Programi", "Donem: $term  Tur: $type", "Toplam Oturum: ${exams.size}", "")
+
+    val groupedByDepartment = exams.groupBy { exam ->
+        courses[exam.courseId]?.departmentId?.ifBlank { "BELIRSIZ" } ?: "BELIRSIZ"
+    }.toSortedMap()
+
+    groupedByDepartment.forEach { (departmentId, departmentExams) ->
+        lines += "=== Bolum: $departmentId ==="
+        lines += "Oturum: ${departmentExams.size}"
         lines += ""
+
+        departmentExams
+            .sortedWith(compareBy<Exam> { it.date }.thenBy { it.slotId })
+            .forEach { exam ->
+                val course = courses[exam.courseId]
+                val roomNames = exam.assignments.mapNotNull { rooms[it.roomId]?.name }.joinToString(", ")
+                val proctorNames = exam.assignments.mapNotNull { users[it.proctorId]?.name }.joinToString(", ")
+                lines += "${course?.code ?: exam.courseId} - ${course?.name.orEmpty()}"
+                lines += "${examDateLabel(exam.date)} ${exam.slotLabel.ifBlank { slotLabel(exam.slotId) }} | Salon: $roomNames"
+                lines += "Gozetmen: $proctorNames | Ogrenci: ${course?.studentCount ?: 0}"
+                lines += ""
+            }
     }
     return SimplePdfWriter.write(lines.map { it.toPdfSafe() })
 }
@@ -101,7 +114,7 @@ private fun scheduleRows(
             exam.examType,
             exam.academicTerm,
             examDateLabel(exam.date),
-            slotLabel(exam.slotId),
+            exam.slotLabel.ifBlank { slotLabel(exam.slotId) },
             roomNames,
             proctorNames,
             (course?.studentCount ?: 0).toString()

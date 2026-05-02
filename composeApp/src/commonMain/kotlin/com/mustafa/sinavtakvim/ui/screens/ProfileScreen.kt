@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.mustafa.sinavtakvim.ThemeState
 import com.mustafa.sinavtakvim.shared.data.repository.ExamRepository
 import com.mustafa.sinavtakvim.shared.models.User
 import com.mustafa.sinavtakvim.shared.utils.toImageBitmap
@@ -42,7 +43,9 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 @OptIn(ExperimentalEncodingApi::class)
-class ProfileScreen(private val userId: String) : Screen {
+class ProfileScreen(
+    private val userId: String
+) : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -143,7 +146,7 @@ class ProfileScreen(private val userId: String) : Screen {
                             .widthIn(max = 1000.dp)
                             .fillMaxWidth(),
                         shape = MaterialTheme.shapes.medium,
-                        color = Color.White,
+                        color = CorporateColors.Surface,
                         elevation = if (isDesktop) 4.dp else 0.dp
                     ) {
                         if (isDesktop) {
@@ -159,6 +162,29 @@ class ProfileScreen(private val userId: String) : Screen {
                                 preferences = preferences,
                                 selectedImageBitmap = selectedImageBitmap,
                                 onPickImage = { launcher.launch() },
+                                onNotificationsToggle = { enabled ->
+                                    preferences["notifications"] = enabled
+                                    user?.let { currentUser ->
+                                        scope.launch {
+                                            val updatedUser = currentUser.copy(preferences = preferences.toMap())
+                                            repository.addUser(updatedUser)
+                                            user = updatedUser
+                                            message = if (enabled) "Bildirimler açıldı." else "Bildirimler kapatıldı."
+                                        }
+                                    }
+                                },
+                                onDarkThemeToggle = { enabled ->
+                                    preferences["darkTheme"] = enabled
+                                    user?.let { currentUser ->
+                                        scope.launch {
+                                            val updatedUser = currentUser.copy(preferences = preferences.toMap())
+                                            repository.addUser(updatedUser)
+                                            user = updatedUser
+                                            ThemeState.darkThemeEnabled = enabled
+                                            message = if (enabled) "Koyu tema açıldı." else "Koyu tema kapatıldı."
+                                        }
+                                    }
+                                },
                                 onSave = {
                                     user?.let { currentUser ->
                                         scope.launch {
@@ -191,6 +217,29 @@ class ProfileScreen(private val userId: String) : Screen {
                                 preferences = preferences,
                                 selectedImageBitmap = selectedImageBitmap,
                                 onPickImage = { launcher.launch() },
+                                onNotificationsToggle = { enabled ->
+                                    preferences["notifications"] = enabled
+                                    user?.let { currentUser ->
+                                        scope.launch {
+                                            val updatedUser = currentUser.copy(preferences = preferences.toMap())
+                                            repository.addUser(updatedUser)
+                                            user = updatedUser
+                                            message = if (enabled) "Bildirimler açıldı." else "Bildirimler kapatıldı."
+                                        }
+                                    }
+                                },
+                                onDarkThemeToggle = { enabled ->
+                                    preferences["darkTheme"] = enabled
+                                    user?.let { currentUser ->
+                                        scope.launch {
+                                            val updatedUser = currentUser.copy(preferences = preferences.toMap())
+                                            repository.addUser(updatedUser)
+                                            user = updatedUser
+                                            ThemeState.darkThemeEnabled = enabled
+                                            message = if (enabled) "Koyu tema açıldı." else "Koyu tema kapatıldı."
+                                        }
+                                    }
+                                },
                                 onSave = {
                                     user?.let { currentUser ->
                                         scope.launch {
@@ -227,6 +276,8 @@ class ProfileScreen(private val userId: String) : Screen {
         preferences: SnapshotStateMap<String, Boolean>,
         selectedImageBitmap: ImageBitmap?,
         onPickImage: () -> Unit,
+        onNotificationsToggle: (Boolean) -> Unit,
+        onDarkThemeToggle: (Boolean) -> Unit,
         onSave: () -> Unit,
         message: String
     ) {
@@ -268,8 +319,8 @@ class ProfileScreen(private val userId: String) : Screen {
                 Text("Uygulama Tercihleri", style = MaterialTheme.typography.h5, color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(24.dp))
 
-                PreferenceItem("Bildirimler", "Sınav değişikliklerini anında bildir", preferences["notifications"] ?: true) { preferences["notifications"] = it }
-                PreferenceItem("Koyu Tema", "Göz yorgunluğunu azaltmak için karanlık mod", preferences["darkTheme"] ?: false) { preferences["darkTheme"] = it }
+                PreferenceItem("Bildirimler", "Sınav değişikliklerini anında bildir", preferences["notifications"] ?: true, onNotificationsToggle)
+                PreferenceItem("Koyu Tema", "Göz yorgunluğunu azaltmak için karanlık mod", preferences["darkTheme"] ?: false, onDarkThemeToggle)
                 PreferenceItem("İki Faktörlü Doğrulama", "Hesap güvenliğini artırın", preferences["2fa"] ?: false) { preferences["2fa"] = it }
             }
         }
@@ -308,21 +359,23 @@ class ProfileScreen(private val userId: String) : Screen {
         preferences: SnapshotStateMap<String, Boolean>,
         selectedImageBitmap: ImageBitmap?,
         onPickImage: () -> Unit,
+        onNotificationsToggle: (Boolean) -> Unit,
+        onDarkThemeToggle: (Boolean) -> Unit,
         onSave: () -> Unit,
         message: String
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             ProfilePictureSection(selectedImageBitmap, onPickImage)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             Text(name.ifBlank { "İsimsiz Kullanıcı" }, style = MaterialTheme.typography.h6, fontWeight = FontWeight.Bold, color = CorporateColors.Ink)
             Text(email.ifBlank { "E-posta tanımlanmamış" }, style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(18.dp))
             
             Text("Hesap Bilgileri", style = MaterialTheme.typography.h6, color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
             ProfileForm(
                 name, onNameChange,
@@ -332,15 +385,15 @@ class ProfileScreen(private val userId: String) : Screen {
                 onSave, message
             )
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(22.dp))
             DividerLine()
-            Spacer(Modifier.height(24.dp))
-
-            Text("Tercihler", style = MaterialTheme.typography.h6, color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(16.dp))
 
-            PreferenceItem("Bildirimler", "Anlık uyarılar", preferences["notifications"] ?: true) { preferences["notifications"] = it }
-            PreferenceItem("Koyu Tema", "Karanlık mod", preferences["darkTheme"] ?: false) { preferences["darkTheme"] = it }
+            Text("Tercihler", style = MaterialTheme.typography.h6, color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(10.dp))
+
+            PreferenceItem("Bildirimler", "Anlık uyarılar", preferences["notifications"] ?: true, onNotificationsToggle)
+            PreferenceItem("Koyu Tema", "Karanlık mod", preferences["darkTheme"] ?: false, onDarkThemeToggle)
             PreferenceItem("Güvenlik", "İki faktörlü giriş", preferences["2fa"] ?: false) { preferences["2fa"] = it }
         }
     }

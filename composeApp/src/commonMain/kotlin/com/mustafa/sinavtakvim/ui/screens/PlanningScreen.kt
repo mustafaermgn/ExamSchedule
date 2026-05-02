@@ -3,6 +3,7 @@ package com.mustafa.sinavtakvim.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.CircularProgressIndicator
@@ -54,6 +56,7 @@ import com.mustafa.sinavtakvim.shared.data.repository.ExamRepository
 import com.mustafa.sinavtakvim.shared.models.Course
 import com.mustafa.sinavtakvim.shared.models.Exam
 import com.mustafa.sinavtakvim.shared.models.Room
+import com.mustafa.sinavtakvim.shared.models.SlotConfig
 import com.mustafa.sinavtakvim.shared.models.User
 import com.mustafa.sinavtakvim.shared.utils.buildScheduleExcelXml
 import com.mustafa.sinavtakvim.shared.utils.buildSchedulePdf
@@ -67,7 +70,9 @@ import com.mustafa.sinavtakvim.ui.components.MetricCard
 import com.mustafa.sinavtakvim.ui.components.PageHeader
 import com.mustafa.sinavtakvim.ui.components.SectionTitle
 import com.mustafa.sinavtakvim.ui.components.StatusPill
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
 class PlanningScreen : Screen {
@@ -88,6 +93,8 @@ class PlanningScreen : Screen {
         var message by remember { mutableStateOf("") }
         var examType by remember { mutableStateOf("VIZE") }
         var academicTerm by remember { mutableStateOf("2026 Bahar") }
+        var slotTimesText by remember { mutableStateOf("09:00,11:00,14:00,16:00") }
+        var mobileStep by remember { mutableStateOf("KURULUM") }
 
         suspend fun load() {
             courses = repository.getCourses().sortedBy { it.code }
@@ -95,6 +102,7 @@ class PlanningScreen : Screen {
             proctors = repository.getProctors().sortedBy { it.name }
             users = repository.getUsers()
             savedExams = repository.getExams()
+            slotTimesText = repository.getSlotConfig().slotTimes.joinToString(",")
         }
 
         fun SolverResult.withMetadata(): SolverResult {
@@ -109,12 +117,25 @@ class PlanningScreen : Screen {
             )
         }
 
+        fun SolverResult.withRuleWarnings(): SolverResult {
+            val dynamicWarnings = buildList {
+                if (metrics.dailySemesterLimitWarnings > 0) {
+                    add("Aynı gün 2 sınav limitini aşan ${metrics.dailySemesterLimitWarnings} dönem kaydı var.")
+                }
+                if (metrics.proctorLoadImbalance > 2) {
+                    add("Gözetmen görev dağılımı dengesiz (yük farkı: ${metrics.proctorLoadImbalance}).")
+                }
+            }
+            return copy(violations = violations + dynamicWarnings)
+        }
+
         suspend fun runAnalysis() {
             busy = true
             message = ""
             val activeCourses = repository.getCourses().filter { it.studentCount > 0 }
             val activeRooms = repository.getRooms()
             val activeProctors = repository.getProctors()
+            val slotTimes = parseSlotTimes(slotTimesText)
 
             if (activeCourses.isEmpty()) {
                 results = emptyList()
@@ -124,14 +145,21 @@ class PlanningScreen : Screen {
                 message = "Planlama için salon ve gözetmen havuzu tamamlanmalıdır."
             } else {
                 results = listOf(
-                    DPSolver().solve(activeCourses, activeRooms, activeProctors).withMetadata(),
-                    GreedySolver().solve(activeCourses, activeRooms, activeProctors).withMetadata()
+                    DPSolver().solve(activeCourses, activeRooms, activeProctors, slotTimes).withMetadata().withRuleWarnings(),
+                    GreedySolver().solve(activeCourses, activeRooms, activeProctors, slotTimes).withMetadata().withRuleWarnings()
                 )
                 selected = 0
                 message = "Analiz tamamlandı. Uygulanacak sonucu seçebilirsiniz."
             }
             busy = false
             load()
+        }
+
+        suspend fun saveSlots() {
+            val parsed = parseSlotTimes(slotTimesText)
+            repository.saveSlotConfig(SlotConfig(slotTimes = parsed))
+            slotTimesText = parsed.joinToString(",")
+            message = "Oturum saatleri kaydedildi."
         }
 
         suspend fun applySelectedPlan() {
@@ -146,23 +174,29 @@ class PlanningScreen : Screen {
         }
 
         suspend fun exportSchedule(isPdf: Boolean) {
-            val exams = savedExams.ifEmpty { repository.getExams() }.ifEmpty { results.getOrNull(selected)?.withMetadata()?.exams.orEmpty() }
-            if (exams.isEmpty()) {
-                message = "Dışa aktarmak için önce bir sınav programı oluşturun."
-                return
+            try {
+                val exams = savedExams.ifEmpty { repository.getExams() }.ifEmpty { results.getOrNull(selected)?.withMetadata()?.exams.orEmpty() }
+                if (exams.isEmpty()) {
+                    message = "Dışa aktarmak için önce bir sınav programı oluşturun."
+                    return
+                }
+                val courseMap = repository.getCourses().associateBy { it.id }
+                val roomMap = repository.getRooms().associateBy { it.id }
+                val userMap = repository.getUsers().associateBy { it.uid }
+                val extension = if (isPdf) "pdf" else "xml"
+                val fileName = "sinav_programi_${examType.lowercase()}_${academicTerm.fileSafe()}.$extension"
+                val bytes = withContext(Dispatchers.Default) {
+                    if (isPdf) {
+                        buildSchedulePdf(exams, courseMap, roomMap, userMap)
+                    } else {
+                        buildScheduleExcelXml(exams, courseMap, roomMap, userMap)
+                    }
+                }
+                val path = saveReportFile(fileName, bytes)
+                message = "Program dışa aktarıldı: $path"
+            } catch (t: Throwable) {
+                message = "Dışa aktarma başarısız: ${t.message ?: "bilinmeyen hata"}"
             }
-            val courseMap = repository.getCourses().associateBy { it.id }
-            val roomMap = repository.getRooms().associateBy { it.id }
-            val userMap = repository.getUsers().associateBy { it.uid }
-            val extension = if (isPdf) "pdf" else "xls"
-            val fileName = "sinav_programi_${examType.lowercase()}_${academicTerm.fileSafe()}.$extension"
-            val bytes = if (isPdf) {
-                buildSchedulePdf(exams, courseMap, roomMap, userMap)
-            } else {
-                buildScheduleExcelXml(exams, courseMap, roomMap, userMap)
-            }
-            val path = saveReportFile(fileName, bytes)
-            message = "Program dışa aktarıldı: $path"
         }
 
         LaunchedEffect(Unit) { load() }
@@ -231,17 +265,35 @@ class PlanningScreen : Screen {
                                 onExamTypeChange = { examType = it },
                                 academicTerm = academicTerm,
                                 onAcademicTermChange = { academicTerm = it },
+                                slotTimesText = slotTimesText,
+                                onSlotTimesChange = { slotTimesText = it },
                                 busy = busy,
                                 hasResults = results.isNotEmpty(),
                                 hasSchedule = previewExams.isNotEmpty(),
+                                compact = !isDesktop,
                                 onRun = { scope.launch { runAnalysis() } },
+                                onSaveSlots = { scope.launch { saveSlots() } },
                                 onApply = { scope.launch { applySelectedPlan() } },
                                 onExportExcel = { scope.launch { exportSchedule(isPdf = false) } },
                                 onExportPdf = { scope.launch { exportSchedule(isPdf = true) } }
                             )
                         }
+                        if (!isDesktop) {
+                            item {
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    SegmentedChoice("Kurulum", mobileStep == "KURULUM", Modifier.widthIn(min = 110.dp)) { mobileStep = "KURULUM" }
+                                    SegmentedChoice("Sonuçlar", mobileStep == "SONUÇ", Modifier.widthIn(min = 110.dp)) { mobileStep = "SONUÇ" }
+                                    SegmentedChoice("Önizleme", mobileStep == "ÖNİZLEME", Modifier.widthIn(min = 110.dp)) { mobileStep = "ÖNİZLEME" }
+                                }
+                            }
+                        }
 
-                        if (results.isNotEmpty()) {
+                        if (results.isNotEmpty() && (isDesktop || mobileStep == "SONUÇ")) {
                             item {
                                 if (isDesktop) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -271,7 +323,7 @@ class PlanningScreen : Screen {
                             }
                         }
 
-                        item {
+                        if (isDesktop || mobileStep == "ÖNİZLEME") item {
                             SchedulePreview(
                                 exams = previewExams,
                                 courses = courseMap,
@@ -300,10 +352,14 @@ class PlanningScreen : Screen {
         onExamTypeChange: (String) -> Unit,
         academicTerm: String,
         onAcademicTermChange: (String) -> Unit,
+        slotTimesText: String,
+        onSlotTimesChange: (String) -> Unit,
         busy: Boolean,
         hasResults: Boolean,
         hasSchedule: Boolean,
+        compact: Boolean,
         onRun: () -> Unit,
+        onSaveSlots: () -> Unit,
         onApply: () -> Unit,
         onExportExcel: () -> Unit,
         onExportPdf: () -> Unit
@@ -315,65 +371,152 @@ class PlanningScreen : Screen {
             }
             Spacer(Modifier.height(18.dp))
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                SegmentedChoice("Vize", examType == "VIZE", Modifier.weight(1f)) { onExamTypeChange("VIZE") }
-                SegmentedChoice("Final", examType == "FINAL", Modifier.weight(1f)) { onExamTypeChange("FINAL") }
-                OutlinedTextField(
-                    value = academicTerm,
-                    onValueChange = onAcademicTermChange,
-                    label = { Text("Akademik dönem") },
-                    modifier = Modifier.weight(1.4f),
-                    singleLine = true
-                )
+            if (compact) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SegmentedChoice("Vize", examType == "VIZE", Modifier.weight(1f)) { onExamTypeChange("VIZE") }
+                        SegmentedChoice("Final", examType == "FINAL", Modifier.weight(1f)) { onExamTypeChange("FINAL") }
+                    }
+                    OutlinedTextField(
+                        value = academicTerm,
+                        onValueChange = onAcademicTermChange,
+                        label = { Text("Akademik dönem") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = slotTimesText,
+                        onValueChange = onSlotTimesChange,
+                        label = { Text("Oturumlar (09:00,11:00,14:00)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedButton(
+                        onClick = onSaveSlots,
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) { Text("Oturumları kaydet") }
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SegmentedChoice("Vize", examType == "VIZE", Modifier.weight(1f)) { onExamTypeChange("VIZE") }
+                    SegmentedChoice("Final", examType == "FINAL", Modifier.weight(1f)) { onExamTypeChange("FINAL") }
+                    OutlinedTextField(
+                        value = academicTerm,
+                        onValueChange = onAcademicTermChange,
+                        label = { Text("Akademik dönem") },
+                        modifier = Modifier.weight(1.4f),
+                        singleLine = true
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = slotTimesText,
+                        onValueChange = onSlotTimesChange,
+                        label = { Text("Oturum saatleri (virgülle)") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedButton(onClick = onSaveSlots, modifier = Modifier.height(56.dp)) {
+                        Text("Kaydet")
+                    }
+                }
             }
-
             Spacer(Modifier.height(18.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(
-                    onClick = onRun,
-                    enabled = !busy,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.buttonColors(backgroundColor = CorporateColors.Primary)
-                ) {
-                    if (busy) {
-                        CircularProgressIndicator(modifier = Modifier.width(22.dp).height(22.dp), color = Color.White, strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+            if (compact) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = onRun,
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        colors = ButtonDefaults.buttonColors(backgroundColor = CorporateColors.Primary)
+                    ) {
+                        if (busy) {
+                            CircularProgressIndicator(modifier = Modifier.width(22.dp).height(22.dp), color = Color.White, strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Analizi çalıştır", color = Color.White)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onApply,
+                        enabled = hasResults && !busy,
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = CorporateColors.Primary)
                         Spacer(Modifier.width(8.dp))
-                        Text("Analizi çalıştır", color = Color.White)
+                        Text("Seçili planı uygula", color = CorporateColors.Primary)
+                    }
+
+                    OutlinedButton(
+                        onClick = onExportExcel,
+                        enabled = hasSchedule,
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        Icon(Icons.Default.TableChart, contentDescription = null, tint = CorporateColors.Primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Excel indir", color = CorporateColors.Primary)
+                    }
+                    OutlinedButton(
+                        onClick = onExportPdf,
+                        enabled = hasSchedule,
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = CorporateColors.Primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("PDF indir", color = CorporateColors.Primary)
+                    }
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = onRun,
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(backgroundColor = CorporateColors.Primary)
+                    ) {
+                        if (busy) {
+                            CircularProgressIndicator(modifier = Modifier.width(22.dp).height(22.dp), color = Color.White, strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Analizi çalıştır", color = Color.White)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onApply,
+                        enabled = hasResults && !busy,
+                        modifier = Modifier.weight(1f).height(48.dp)
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = CorporateColors.Primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Seçili planı uygula", color = CorporateColors.Primary)
                     }
                 }
 
-                OutlinedButton(
-                    onClick = onApply,
-                    enabled = hasResults && !busy,
-                    modifier = Modifier.weight(1f).height(48.dp)
-                ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = CorporateColors.Primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Seçili planı uygula", color = CorporateColors.Primary)
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick = onExportExcel,
-                    enabled = hasSchedule,
-                    modifier = Modifier.weight(1f).height(46.dp)
-                ) {
-                    Icon(Icons.Default.TableChart, contentDescription = null, tint = CorporateColors.Primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Excel indir", color = CorporateColors.Primary)
-                }
-                OutlinedButton(
-                    onClick = onExportPdf,
-                    enabled = hasSchedule,
-                    modifier = Modifier.weight(1f).height(46.dp)
-                ) {
-                    Icon(Icons.Default.Download, contentDescription = null, tint = CorporateColors.Primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text("PDF indir", color = CorporateColors.Primary)
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = onExportExcel,
+                        enabled = hasSchedule,
+                        modifier = Modifier.weight(1f).height(46.dp)
+                    ) {
+                        Icon(Icons.Default.TableChart, contentDescription = null, tint = CorporateColors.Primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Excel indir", color = CorporateColors.Primary)
+                    }
+                    OutlinedButton(
+                        onClick = onExportPdf,
+                        enabled = hasSchedule,
+                        modifier = Modifier.weight(1f).height(46.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = CorporateColors.Primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("PDF indir", color = CorporateColors.Primary)
+                    }
                 }
             }
         }
@@ -491,7 +634,7 @@ class PlanningScreen : Screen {
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text(examDateLabel(exam.date), style = MaterialTheme.typography.caption, color = CorporateColors.Muted)
-                            Text(slotLabel(exam.slotId), color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
+                            Text(exam.slotLabel.ifBlank { slotLabel(exam.slotId) }, color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -524,5 +667,15 @@ class PlanningScreen : Screen {
             .joinToString("")
             .trim('_')
             .ifBlank { "donem" }
+    }
+
+    private fun parseSlotTimes(raw: String): List<String> {
+        val regex = Regex("""^([01]\d|2[0-3]):([0-5]\d)$""")
+        return raw.split(",")
+            .map { it.trim() }
+            .filter { it.matches(regex) }
+            .distinct()
+            .sorted()
+            .ifEmpty { listOf("09:00", "11:00", "14:00", "16:00") }
     }
 }

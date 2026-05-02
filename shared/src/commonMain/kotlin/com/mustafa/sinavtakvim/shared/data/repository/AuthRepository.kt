@@ -6,7 +6,6 @@ import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.firestore.firestore
 
 class AuthRepository(private val firebaseAuth: FirebaseAuth?) {
-    private var demoSignedIn = false
     private var selectedRole = UserRole.ADMIN
     private var selectedEmail = ""
     private var selectedUserId = ""
@@ -22,51 +21,32 @@ class AuthRepository(private val firebaseAuth: FirebaseAuth?) {
         }
 
         selectedEmail = email.trim()
-        val expectedDemoRole = demoRoleForEmail(selectedEmail)
-        if (expectedDemoRole != null && expectedDemoRole != role) {
-            return Result.failure(IllegalArgumentException("Bu e-posta seçilen kullanıcı rolü ile eşleşmiyor."))
-        }
-
         selectedRole = role
 
         return try {
             val result = firebaseAuth?.signInWithEmailAndPassword(selectedEmail, password)
                 ?: throw IllegalStateException("Firebase Auth bu platformda başlatılamadı.")
             syncRoleFromFirestore(selectedEmail)
-            demoSignedIn = false
             Result.success(result.user)
         } catch (e: Exception) {
-            // Check Firestore for dynamically created proctors
+            // Fallback: local kullanıcı yönetimi ekranından eklenen kullanıcılar
+            // Firebase Auth hesabı olmadan da uygulamaya girebilsin.
             try {
-                val usersRef = firestore.collection("Users_v2")
-                val users = usersRef.get().documents.map { it.data<com.mustafa.sinavtakvim.shared.models.User>() }
-                val dynamicUser = users.find { it.email == selectedEmail && it.password == password }
-                
-                if (dynamicUser != null) {
-                    if (dynamicUser.role != role) {
-                        return Result.failure(IllegalArgumentException("Bu e-posta seçilen kullanıcı rolü ile eşleşmiyor."))
-                    }
-                    demoSignedIn = true
-                    selectedRole = dynamicUser.role
-                    selectedUserId = dynamicUser.uid
-                    Result.success(null)
-                } else if (canUseDemoSession(selectedEmail, password)) {
-                    demoSignedIn = true
-                    selectedRole = expectedDemoRole ?: role
-                    selectedUserId = demoUserIdForEmail(selectedEmail) ?: if (selectedRole == UserRole.ADMIN) "u-admin" else "p1"
+                val users = firestore.collection("Users").get().documents.map { it.data<com.mustafa.sinavtakvim.shared.models.User>() }
+                val user = users.firstOrNull {
+                    it.email.equals(selectedEmail, ignoreCase = true) &&
+                        it.password == password &&
+                        it.role == role
+                }
+                if (user != null) {
+                    selectedRole = user.role
+                    selectedUserId = user.uid
                     Result.success(null)
                 } else {
                     Result.failure(e)
                 }
-            } catch (firestoreError: Exception) {
-                if (canUseDemoSession(selectedEmail, password)) {
-                    demoSignedIn = true
-                    selectedRole = expectedDemoRole ?: role
-                    selectedUserId = demoUserIdForEmail(selectedEmail) ?: if (selectedRole == UserRole.ADMIN) "u-admin" else "p1"
-                    Result.success(null)
-                } else {
-                    Result.failure(e)
-                }
+            } catch (_: Exception) {
+                Result.failure(e)
             }
         }
     }
@@ -86,21 +66,15 @@ class AuthRepository(private val firebaseAuth: FirebaseAuth?) {
         return try {
             val result = firebaseAuth?.createUserWithEmailAndPassword(selectedEmail, password)
                 ?: throw IllegalStateException("Firebase Auth bu platformda başlatılamadı.")
-            demoSignedIn = false
             Result.success(result.user)
         } catch (e: Exception) {
-            if (selectedEmail.endsWith("@fakulte.edu.tr")) {
-                demoSignedIn = true
-                Result.success(null)
-            } else {
-                Result.failure(e)
-            }
+            Result.failure(e)
         }
     }
 
     fun getCurrentUser(): FirebaseUser? = firebaseAuth?.currentUser
 
-    fun isSignedIn(): Boolean = demoSignedIn || firebaseAuth?.currentUser != null
+    fun isSignedIn(): Boolean = firebaseAuth?.currentUser != null
 
     fun currentRole(): UserRole = selectedRole
 
@@ -109,59 +83,24 @@ class AuthRepository(private val firebaseAuth: FirebaseAuth?) {
     fun currentUserId(): String {
         val firebaseUid = firebaseAuth?.currentUser?.uid
         if (!firebaseUid.isNullOrBlank()) return firebaseUid
-        
-        if (selectedUserId.isNotBlank()) return selectedUserId
-
-        return when {
-            selectedEmail.equals("admin@fakulte.edu.tr", ignoreCase = true) -> "u-admin"
-            selectedEmail.equals("mert.celik@fakulte.edu.tr", ignoreCase = true) -> "p1"
-            selectedEmail.equals("irem.koc@fakulte.edu.tr", ignoreCase = true) -> "p2"
-            selectedEmail.equals("selin.gunes@fakulte.edu.tr", ignoreCase = true) -> "p3"
-            selectedRole == UserRole.PROCTOR -> "p1"
-            else -> "u-admin"
-        }
+        return selectedUserId
     }
 
     suspend fun logout() {
-        demoSignedIn = false
         selectedEmail = ""
+        selectedUserId = ""
         firebaseAuth?.signOut()
-    }
-
-    private fun canUseDemoSession(email: String, password: String): Boolean {
-        return email.endsWith("@fakulte.edu.tr") && password == "123456"
     }
 
     private suspend fun syncRoleFromFirestore(email: String) {
         try {
-            val users = firestore.collection("Users_v2").get().documents.map { it.data<com.mustafa.sinavtakvim.shared.models.User>() }
+            val users = firestore.collection("Users").get().documents.map { it.data<com.mustafa.sinavtakvim.shared.models.User>() }
             val user = users.firstOrNull { it.email.equals(email, ignoreCase = true) }
             if (user != null) {
                 selectedRole = user.role
                 selectedUserId = user.uid
             }
         } catch (_: Exception) {
-        }
-    }
-
-    private fun demoRoleForEmail(email: String): UserRole? {
-        return when {
-            email.equals("admin@fakulte.edu.tr", ignoreCase = true) -> UserRole.ADMIN
-            email.endsWith("@fakulte.edu.tr") -> UserRole.PROCTOR
-            else -> null
-        }
-    }
-
-    private fun demoUserIdForEmail(email: String): String? {
-        return when {
-            email.equals("admin@fakulte.edu.tr", ignoreCase = true) -> "u-admin"
-            email.equals("mert.celik@fakulte.edu.tr", ignoreCase = true) -> "p1"
-            email.equals("irem.koc@fakulte.edu.tr", ignoreCase = true) -> "p2"
-            email.equals("selin.gunes@fakulte.edu.tr", ignoreCase = true) -> "p3"
-            email.equals("ege.sen@fakulte.edu.tr", ignoreCase = true) -> "p4"
-            email.equals("zeynep.korkmaz@fakulte.edu.tr", ignoreCase = true) -> "p5"
-            email.equals("cem.uslu@fakulte.edu.tr", ignoreCase = true) -> "p6"
-            else -> null
         }
     }
 }

@@ -165,7 +165,7 @@ class MapScreen(
                                 val course = courses[exam.courseId]
                                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text(course?.code ?: "Ders", fontWeight = FontWeight.Bold)
-                                    Text("${examDateLabel(exam.date)} · ${slotLabel(exam.slotId)}", style = MaterialTheme.typography.caption)
+                                    Text("${examDateLabel(exam.date)} · ${exam.slotLabel.ifBlank { slotLabel(exam.slotId) }}", style = MaterialTheme.typography.caption)
                                 }
                             }
                         }
@@ -210,7 +210,7 @@ class MapScreen(
                 roomExams.take(2).forEach { exam ->
                     val course = courses[exam.courseId]
                     DividerLine(Modifier.padding(vertical = 8.dp))
-                    Text("${course?.code} - ${slotLabel(exam.slotId)}", style = MaterialTheme.typography.body2)
+                    Text("${course?.code} - ${exam.slotLabel.ifBlank { slotLabel(exam.slotId) }}", style = MaterialTheme.typography.body2)
                 }
             }
         }

@@ -2,6 +2,7 @@ package com.mustafa.sinavtakvim.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.Button
 import androidx.compose.material.ButtonDefaults
 import androidx.compose.material.CircularProgressIndicator
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.School
@@ -70,7 +73,9 @@ import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.core.PickerMode
 import io.github.vinceglb.filekit.core.PickerType
 import io.github.vinceglb.filekit.core.PlatformFile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 
 class AdminDataScreen : Screen {
@@ -86,10 +91,12 @@ class AdminDataScreen : Screen {
         var students by remember { mutableStateOf<List<Student>>(emptyList()) }
         var message by remember { mutableStateOf("") }
         var importBusy by remember { mutableStateOf(false) }
+        var resetBusy by remember { mutableStateOf(false) }
 
         var courseCode by remember { mutableStateOf("") }
         var courseName by remember { mutableStateOf("") }
         var semester by remember { mutableStateOf("") }
+        var departmentId by remember { mutableStateOf("BIL") }
         var instructorName by remember { mutableStateOf("") }
 
         var roomName by remember { mutableStateOf("") }
@@ -100,6 +107,7 @@ class AdminDataScreen : Screen {
         var roomLng by remember { mutableStateOf("28.9784") }
 
         var selectedCourseId by remember { mutableStateOf("") }
+        var mobileStep by remember { mutableStateOf("DERS") }
 
         suspend fun load() {
             courses = repository.getCourses().sortedBy { it.code }
@@ -125,7 +133,9 @@ class AdminDataScreen : Screen {
                     importBusy = true
                     message = ""
                     try {
-                        val result = parseStudentSpreadsheet(file.readBytes(), file.name)
+                        val result = withContext(Dispatchers.Default) {
+                            parseStudentSpreadsheet(file.readBytes(), file.name)
+                        }
                         if (result.students.isEmpty()) {
                             message = "Dosyada içe aktarılabilecek öğrenci satırı bulunamadı."
                         } else {
@@ -137,7 +147,7 @@ class AdminDataScreen : Screen {
                             }
                             load()
                         }
-                    } catch (error: Exception) {
+                    } catch (error: Throwable) {
                         message = "Dosya okunamadı: ${error.message ?: "bilinmeyen hata"}"
                     } finally {
                         importBusy = false
@@ -178,6 +188,39 @@ class AdminDataScreen : Screen {
 
                     Spacer(Modifier.height(24.dp))
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    resetBusy = true
+                                    try {
+                                        repository.clearDatabase()
+                                        message = "Veritabanı sıfırlandı. Sadece admin@fakulte.edu.tr hesabı bırakıldı."
+                                        load()
+                                    } catch (e: Exception) {
+                                        message = "Sıfırlama hatası: ${e.message ?: "bilinmeyen hata"}"
+                                    } finally {
+                                        resetBusy = false
+                                    }
+                                }
+                            },
+                            enabled = !resetBusy && !importBusy,
+                            border = BorderStroke(1.dp, CorporateColors.Risk)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = CorporateColors.Risk)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (resetBusy) "Sıfırlanıyor..." else "Veritabanını Sıfırla",
+                                color = CorporateColors.Risk
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -204,8 +247,14 @@ class AdminDataScreen : Screen {
                             }
                         }
 
-                        item {
-                            WorkflowCard()
+                        if (isDesktop) {
+                            item { WorkflowCard() }
+                        } else {
+                            item {
+                                CorporateCard(Modifier.fillMaxWidth()) {
+                                    SectionTitle("Mobil Akış", "1) Ders  2) Öğrenci  3) Salon  4) Gözetmen")
+                                }
+                            }
                         }
 
                         item {
@@ -219,6 +268,8 @@ class AdminDataScreen : Screen {
                                             onNameChange = { courseName = it },
                                             sem = semester,
                                             onSemChange = { semester = it },
+                                            department = departmentId,
+                                            onDepartmentChange = { departmentId = it },
                                             instructor = instructorName,
                                             onInstructorChange = { instructorName = it },
                                             onSave = {
@@ -233,7 +284,7 @@ class AdminDataScreen : Screen {
                                                             name = courseName.trim(),
                                                             studentCount = 0,
                                                             semester = sem,
-                                                            departmentId = "BIL",
+                                                            departmentId = departmentId.trim().uppercase().ifBlank { "BIL" },
                                                             instructorName = instructorName.trim()
                                                         )
                                                         repository.addCourse(course)
@@ -308,96 +359,105 @@ class AdminDataScreen : Screen {
                                 }
                             } else {
                                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    CourseAddForm(
-                                        code = courseCode,
-                                        onCodeChange = { courseCode = it },
-                                        name = courseName,
-                                        onNameChange = { courseName = it },
-                                        sem = semester,
-                                        onSemChange = { semester = it },
-                                        instructor = instructorName,
-                                        onInstructorChange = { instructorName = it },
-                                        onSave = {
-                                            val sem = semester.toIntOrNull()
-                                            if (courseCode.isBlank() || courseName.isBlank() || sem == null) {
-                                                message = "Ders kodu, ders adı ve yarıyıl zorunludur."
-                                            } else {
-                                                scope.launch {
-                                                    val course = Course(
-                                                        id = stableId("course", courseCode),
-                                                        code = courseCode.trim().uppercase(),
-                                                        name = courseName.trim(),
-                                                        semester = sem,
-                                                        departmentId = "BIL",
-                                                        instructorName = instructorName.trim()
-                                                    )
-                                                    repository.addCourse(course)
-                                                    selectedCourseId = course.id
-                                                    courseCode = ""
-                                                    courseName = ""
-                                                    semester = ""
-                                                    instructorName = ""
-                                                    message = "${course.code} ders havuzuna eklendi."
-                                                    load()
-                                                }
-                                            }
-                                        }
+                                    MobileStepTabs(
+                                        selected = mobileStep,
+                                        onSelect = { mobileStep = it },
+                                        steps = listOf("DERS", "ÖĞRENCİ", "SALON", "GÖZETMEN")
                                     )
 
-                                    StudentUploadPanel(
-                                        courses = courses,
-                                        selectedCourseId = selectedCourseId,
-                                        onSelectCourse = { selectedCourseId = it },
-                                        counts = studentCountByCourse,
-                                        busy = importBusy,
-                                        onPickFile = { importLauncher.launch() }
-                                    )
-
-                                    RoomAddForm(
-                                        name = roomName,
-                                        onNameChange = { roomName = it },
-                                        capacity = roomCapacity,
-                                        onCapChange = { roomCapacity = it },
-                                        floor = roomFloor,
-                                        onFloorChange = { roomFloor = it },
-                                        building = roomBuilding,
-                                        onBuildingChange = { roomBuilding = it },
-                                        lat = roomLat,
-                                        onLatChange = { roomLat = it },
-                                        lng = roomLng,
-                                        onLngChange = { roomLng = it },
-                                        onSave = {
-                                            val cap = roomCapacity.toIntOrNull()
-                                            if (roomName.isBlank() || cap == null) {
-                                                message = "Salon adı ve kapasite zorunludur."
-                                            } else {
-                                                scope.launch {
-                                                    repository.addRoom(
-                                                        Room(
-                                                            id = stableId("room", roomName),
-                                                            name = roomName.trim(),
-                                                            capacity = cap,
-                                                            floor = roomFloor.toIntOrNull() ?: 0,
-                                                            latitude = roomLat.toDoubleOrNull() ?: 41.0082,
-                                                            longitude = roomLng.toDoubleOrNull() ?: 28.9784,
-                                                            building = roomBuilding.trim().ifBlank { "Fakülte Binası" },
-                                                            facilities = listOf("Standart sınav düzeni")
+                                    when (mobileStep) {
+                                        "DERS" -> CourseAddForm(
+                                            code = courseCode,
+                                            onCodeChange = { courseCode = it },
+                                            name = courseName,
+                                            onNameChange = { courseName = it },
+                                            sem = semester,
+                                            onSemChange = { semester = it },
+                                            department = departmentId,
+                                            onDepartmentChange = { departmentId = it },
+                                            instructor = instructorName,
+                                            onInstructorChange = { instructorName = it },
+                                            onSave = {
+                                                val sem = semester.toIntOrNull()
+                                                if (courseCode.isBlank() || courseName.isBlank() || sem == null) {
+                                                    message = "Ders kodu, ders adı ve yarıyıl zorunludur."
+                                                } else {
+                                                    scope.launch {
+                                                        val course = Course(
+                                                            id = stableId("course", courseCode),
+                                                            code = courseCode.trim().uppercase(),
+                                                            name = courseName.trim(),
+                                                            semester = sem,
+                                                            departmentId = departmentId.trim().uppercase().ifBlank { "BIL" },
+                                                            instructorName = instructorName.trim()
                                                         )
-                                                    )
-                                                    roomName = ""
-                                                    roomCapacity = ""
-                                                    roomFloor = ""
-                                                    message = "Salon kaydedildi."
-                                                    load()
+                                                        repository.addCourse(course)
+                                                        selectedCourseId = course.id
+                                                        courseCode = ""
+                                                        courseName = ""
+                                                        semester = ""
+                                                        instructorName = ""
+                                                        message = "${course.code} ders havuzuna eklendi."
+                                                        mobileStep = "ÖĞRENCİ"
+                                                        load()
+                                                    }
                                                 }
                                             }
-                                        }
-                                    )
-
-                                    AdminRelationPanel(
-                                        proctors = proctors,
-                                        onManageUsers = { navigator.push(UserManagementScreen()) }
-                                    )
+                                        )
+                                        "ÖĞRENCİ" -> StudentUploadPanel(
+                                            courses = courses,
+                                            selectedCourseId = selectedCourseId,
+                                            onSelectCourse = { selectedCourseId = it },
+                                            counts = studentCountByCourse,
+                                            busy = importBusy,
+                                            onPickFile = { importLauncher.launch() }
+                                        )
+                                        "SALON" -> RoomAddForm(
+                                            name = roomName,
+                                            onNameChange = { roomName = it },
+                                            capacity = roomCapacity,
+                                            onCapChange = { roomCapacity = it },
+                                            floor = roomFloor,
+                                            onFloorChange = { roomFloor = it },
+                                            building = roomBuilding,
+                                            onBuildingChange = { roomBuilding = it },
+                                            lat = roomLat,
+                                            onLatChange = { roomLat = it },
+                                            lng = roomLng,
+                                            onLngChange = { roomLng = it },
+                                            onSave = {
+                                                val cap = roomCapacity.toIntOrNull()
+                                                if (roomName.isBlank() || cap == null) {
+                                                    message = "Salon adı ve kapasite zorunludur."
+                                                } else {
+                                                    scope.launch {
+                                                        repository.addRoom(
+                                                            Room(
+                                                                id = stableId("room", roomName),
+                                                                name = roomName.trim(),
+                                                                capacity = cap,
+                                                                floor = roomFloor.toIntOrNull() ?: 0,
+                                                                latitude = roomLat.toDoubleOrNull() ?: 41.0082,
+                                                                longitude = roomLng.toDoubleOrNull() ?: 28.9784,
+                                                                building = roomBuilding.trim().ifBlank { "Fakülte Binası" },
+                                                                facilities = listOf("Standart sınav düzeni")
+                                                            )
+                                                        )
+                                                        roomName = ""
+                                                        roomCapacity = ""
+                                                        roomFloor = ""
+                                                        message = "Salon kaydedildi."
+                                                        mobileStep = "GÖZETMEN"
+                                                        load()
+                                                    }
+                                                }
+                                            }
+                                        )
+                                        else -> AdminRelationPanel(
+                                            proctors = proctors,
+                                            onManageUsers = { navigator.push(UserManagementScreen()) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -458,6 +518,8 @@ class AdminDataScreen : Screen {
         onNameChange: (String) -> Unit,
         sem: String,
         onSemChange: (String) -> Unit,
+        department: String,
+        onDepartmentChange: (String) -> Unit,
         instructor: String,
         onInstructorChange: (String) -> Unit,
         onSave: () -> Unit
@@ -486,6 +548,14 @@ class AdminDataScreen : Screen {
                 value = name,
                 onValueChange = onNameChange,
                 label = { Text("Ders adı") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = department,
+                onValueChange = { onDepartmentChange(it.uppercase().filter { ch -> ch.isLetterOrDigit() || ch == '_' }) },
+                label = { Text("Bölüm kodu") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
@@ -743,6 +813,37 @@ class AdminDataScreen : Screen {
             Icon(icon, contentDescription = null, tint = CorporateColors.Muted)
             Spacer(Modifier.width(8.dp))
             Text(text, color = CorporateColors.Muted)
+        }
+    }
+
+    @Composable
+    private fun MobileStepTabs(
+        selected: String,
+        onSelect: (String) -> Unit,
+        steps: List<String>
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            steps.forEach { step ->
+                OutlinedButton(
+                    onClick = { onSelect(step) },
+                    modifier = Modifier.widthIn(min = 110.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        backgroundColor = if (selected == step) CorporateColors.PrimarySoft else CorporateColors.Surface
+                    ),
+                    border = BorderStroke(1.dp, if (selected == step) CorporateColors.Primary else CorporateColors.Border)
+                ) {
+                    Text(
+                        step,
+                        color = if (selected == step) CorporateColors.Primary else CorporateColors.Muted,
+                        maxLines = 1
+                    )
+                }
+            }
         }
     }
 

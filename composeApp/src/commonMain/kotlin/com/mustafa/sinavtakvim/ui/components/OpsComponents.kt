@@ -23,17 +23,38 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 object CorporateColors {
-    val Background = Color(0xFFF2F4F6)
-    val Surface = Color.White
-    val Ink = Color(0xFF172026)
-    val Muted = Color(0xFF66727A)
-    val Border = Color(0xFFE0E5E8)
-    val Primary = Color(0xFF17443D)
-    val PrimarySoft = Color(0xFFE5EEEA)
-    val Steel = Color(0xFF516B7A)
-    val Amber = Color(0xFFB88343)
-    val Risk = Color(0xFF9B4E36)
-    val Success = Color(0xFF2F6B4F)
+    val Primary: Color
+        @Composable get() = MaterialTheme.colors.primary
+
+    val Steel: Color
+        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFF516B7A) else Color(0xFF8AA8BC)
+
+    val Amber: Color
+        @Composable get() = MaterialTheme.colors.secondary
+
+    val Risk: Color
+        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFF9B4E36) else Color(0xFFE08D73)
+
+    val Success: Color
+        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFF2F6B4F) else Color(0xFF70C59B)
+
+    val Background: Color
+        @Composable get() = MaterialTheme.colors.background
+
+    val Surface: Color
+        @Composable get() = MaterialTheme.colors.surface
+
+    val Ink: Color
+        @Composable get() = MaterialTheme.colors.onSurface
+
+    val Muted: Color
+        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFF66727A) else Color(0xFF9FAAB4)
+
+    val Border: Color
+        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFFE0E5E8) else Color(0xFF2A333B)
+
+    val PrimarySoft: Color
+        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFFE5EEEA) else Color(0xFF20342F)
 }
 
 @Composable
@@ -160,7 +181,7 @@ fun ProgressRow(
             Modifier
                 .fillMaxWidth()
                 .height(7.dp)
-                .background(Color(0xFFE7ECEF), MaterialTheme.shapes.small)
+                .background(CorporateColors.Border, MaterialTheme.shapes.small)
         ) {
             Spacer(
                 Modifier

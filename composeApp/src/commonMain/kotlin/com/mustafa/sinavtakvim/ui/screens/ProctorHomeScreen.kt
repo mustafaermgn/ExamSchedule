@@ -306,7 +306,7 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                         color = CorporateColors.Ink
                     )
                     Text(
-                        text = "${examDateLabel(exam.date)} · ${slotLabel(exam.slotId)}",
+                        text = "${examDateLabel(exam.date)} · ${exam.slotLabel.ifBlank { slotLabel(exam.slotId) }}",
                         style = MaterialTheme.typography.caption
                     )
                     Text(

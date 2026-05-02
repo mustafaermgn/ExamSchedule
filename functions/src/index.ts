@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
-import { onDocumentWritten } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentWritten } from "firebase-functions/v2/firestore";
 
 initializeApp();
 
@@ -53,4 +53,65 @@ export const notifyProctorsOnExamWrite = onDocumentWritten("Exams/{examId}", asy
     editorId: "cloud-function",
     timestamp: FieldValue.serverTimestamp()
   });
+});
+
+export const resetFirestoreFromAdminCommand = onDocumentCreated("AdminCommands/{commandId}", async (event) => {
+  const snapshot = event.data;
+  if (!snapshot?.exists) return;
+
+  const data = snapshot.data() as {
+    type?: string;
+    requestedBy?: string;
+  };
+
+  if (data.type !== "RESET_DATABASE") return;
+
+  const db = getFirestore();
+  const commandRef = snapshot.ref;
+
+  try {
+    const requesterId = data.requestedBy ?? "";
+    const requesterDoc = requesterId ? await db.collection("Users").doc(requesterId).get() : null;
+    const requesterRole = requesterDoc?.get("role");
+
+    if (requesterRole !== "ADMIN") {
+      await commandRef.set({
+        status: "failed",
+        error: "Only admin can reset database.",
+        processedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      return;
+    }
+
+    const keepCollections = new Set(["AdminCommands"]);
+    const rootCollections = await db.listCollections();
+    for (const collection of rootCollections) {
+      if (keepCollections.has(collection.id)) continue;
+      await db.recursiveDelete(collection);
+    }
+
+    await db.collection("Users").doc("admin-root").set({
+      uid: "admin-root",
+      name: "Sistem Yöneticisi",
+      email: "admin@fakulte.edu.tr",
+      role: "ADMIN",
+      password: "123456",
+      deptId: "BIL",
+      excuses: [],
+      profileImageUrl: "",
+      phone: "",
+      preferences: {}
+    });
+
+    await commandRef.set({
+      status: "completed",
+      processedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    await commandRef.set({
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+      processedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
 });

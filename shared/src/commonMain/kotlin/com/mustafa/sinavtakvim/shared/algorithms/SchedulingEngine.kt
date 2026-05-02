@@ -10,15 +10,18 @@ import com.mustafa.sinavtakvim.shared.models.UserRole
 internal object SchedulingEngine {
     private const val firstExamDay = 1_777_960_800_000L // 5 May 2026, 09:00 Europe/Istanbul
     private const val dayMillis = 86_400_000L
-    private val slotOffsets = listOf(0L, 2 * 60 * 60 * 1000L, 5 * 60 * 60 * 1000L, 7 * 60 * 60 * 1000L)
 
     fun solve(
         algorithmName: String,
         courses: List<Course>,
         rooms: List<Room>,
         proctors: List<User>,
+        slotTimes: List<String>,
         selectRooms: (target: Int, rooms: List<Room>) -> List<Room>
     ): SolverResult {
+        val normalizedSlotTimes = normalizeSlotTimes(slotTimes)
+        val slotOffsets = normalizedSlotTimes.map { parseOffsetMs(it) }
+        val slotsPerDay = slotOffsets.size
         val cleanCourses = courses.filter { it.id.isNotBlank() && it.studentCount > 0 }
         val cleanRooms = rooms.filter { it.id.isNotBlank() && it.capacity > 0 }
         val cleanProctors = proctors.filter { it.role == UserRole.PROCTOR && it.uid.isNotBlank() }
@@ -45,6 +48,7 @@ internal object SchedulingEngine {
                 slotRooms = slotRooms,
                 slotProctors = slotProctors,
                 selectRooms = selectRooms,
+                slotOffsets = slotOffsets,
                 maxSlot = (cleanCourses.size * 3).coerceAtLeast(16)
             )
 
@@ -62,8 +66,9 @@ internal object SchedulingEngine {
             exams += Exam(
                 id = "${algorithmName.lowercase().replace(" ", "_")}_${course.id}_${plan.slotIndex}",
                 courseId = course.id,
-                date = slotStart(plan.slotIndex),
-                slotId = (plan.slotIndex % slotOffsets.size) + 1,
+                date = slotStart(plan.slotIndex, slotOffsets),
+                slotId = (plan.slotIndex % slotsPerDay) + 1,
+                slotLabel = normalizedSlotTimes[plan.slotIndex % slotsPerDay],
                 assignments = plan.rooms.zip(plan.proctors).map { (room, proctor) ->
                     Assignment(roomId = room.id, proctorId = proctor.uid)
                 },
@@ -75,10 +80,12 @@ internal object SchedulingEngine {
         val metrics = validate(cleanCourses, cleanRooms, cleanProctors, exams, unscheduled, totalCapacity)
         val penalty = metrics.unscheduledCourses +
             metrics.semesterConflicts +
+            metrics.dailySemesterLimitWarnings +
             metrics.capacityFailures +
             metrics.proctorConflicts +
             metrics.excuseConflicts +
-            metrics.consecutiveViolations
+            metrics.consecutiveViolations +
+            metrics.proctorLoadImbalance
         val possibleChecks = (cleanCourses.size * 5).coerceAtLeast(1)
         val accuracy = ((possibleChecks - penalty).toDouble() / possibleChecks).coerceIn(0.0, 1.0)
 
@@ -92,18 +99,10 @@ internal object SchedulingEngine {
         )
     }
 
-    fun slotStart(slotIndex: Int): Long {
+    fun slotStart(slotIndex: Int, slotOffsets: List<Long>): Long {
         val day = slotIndex / slotOffsets.size
         val slot = slotIndex % slotOffsets.size
         return firstExamDay + day * dayMillis + slotOffsets[slot]
-    }
-
-    fun slotLabel(slotId: Int): String = when (slotId) {
-        1 -> "09:00"
-        2 -> "11:00"
-        3 -> "14:00"
-        4 -> "16:00"
-        else -> "Oturum $slotId"
     }
 
     private fun findPlan(
@@ -114,22 +113,34 @@ internal object SchedulingEngine {
         slotRooms: Map<Int, Set<String>>,
         slotProctors: Map<Int, Set<String>>,
         selectRooms: (target: Int, rooms: List<Room>) -> List<Room>,
+        slotOffsets: List<Long>,
         maxSlot: Int
     ): SlotPlan? {
         for (slot in 0 until maxSlot) {
             if (slotSemesters[slot]?.contains(course.semester) == true) continue
 
             val freeRooms = rooms.filterNot { room -> slotRooms[slot]?.contains(room.id) == true }
-            val selectedRooms = selectRooms(course.studentCount, freeRooms)
+            val selectedRooms = selectBestRooms(course.studentCount, freeRooms, selectRooms)
             if (selectedRooms.sumOf { it.capacity } < course.studentCount) continue
 
             val selectedProctors = mutableListOf<User>()
+            val proctorLoad = slotProctors.values.flatten().groupingBy { it }.eachCount()
             for (room in selectedRooms) {
-                val proctor = proctors.firstOrNull { candidate ->
-                    candidate.uid !in selectedProctors.map { it.uid } &&
-                        slotProctors[slot]?.contains(candidate.uid) != true &&
-                        isAvailable(candidate, slot, slotProctors)
-                }
+                val proctor = proctors
+                    .asSequence()
+                    .filter { candidate ->
+                            candidate.uid !in selectedProctors.map { it.uid } &&
+                                slotProctors[slot]?.contains(candidate.uid) != true &&
+                                isAvailable(candidate, slot, slotProctors, slotOffsets)
+                    }
+                    .sortedWith(
+                        compareBy<User>(
+                            { if (it.deptId.equals(course.departmentId, ignoreCase = true)) 0 else 1 },
+                            { proctorLoad[it.uid] ?: 0 },
+                            { it.name }
+                        )
+                    )
+                    .firstOrNull()
                 if (proctor != null) selectedProctors += proctor
             }
             if (selectedProctors.size == selectedRooms.size) return SlotPlan(slot, selectedRooms, selectedProctors)
@@ -137,8 +148,27 @@ internal object SchedulingEngine {
         return null
     }
 
-    private fun isAvailable(proctor: User, slot: Int, slotProctors: Map<Int, Set<String>>): Boolean {
-        val start = slotStart(slot)
+    private fun selectBestRooms(
+        target: Int,
+        freeRooms: List<Room>,
+        selectRooms: (target: Int, rooms: List<Room>) -> List<Room>
+    ): List<Room> {
+        if (freeRooms.isEmpty()) return emptyList()
+        val byFloor = freeRooms.groupBy { it.floor }
+        val perFloor = byFloor.values
+            .map { candidateFloorRooms -> selectRooms(target, candidateFloorRooms) }
+            .filter { it.sumOf { room -> room.capacity } >= target }
+            .minWithOrNull(compareBy<List<Room>>(
+                { it.sumOf { room -> room.capacity } - target },
+                { it.size }
+            ))
+        if (perFloor != null) return perFloor
+
+        return selectRooms(target, freeRooms)
+    }
+
+    private fun isAvailable(proctor: User, slot: Int, slotProctors: Map<Int, Set<String>>, slotOffsets: List<Long>): Boolean {
+        val start = slotStart(slot, slotOffsets)
         val hasExcuse = proctor.excuses.any { start in it.start..it.end }
         if (hasExcuse) return false
 
@@ -166,6 +196,7 @@ internal object SchedulingEngine {
         val roomsById = rooms.associateBy { it.id }
         val proctorsById = proctors.associateBy { it.uid }
         var semesterConflicts = 0
+        var dailySemesterLimitWarnings = 0
         var capacityFailures = 0
         var proctorConflicts = 0
         var excuseConflicts = 0
@@ -195,15 +226,27 @@ internal object SchedulingEngine {
             }
         }
 
+        val byDayAndSemester = exams.groupBy { exam ->
+            val day = ((exam.date - firstExamDay) / dayMillis).toInt().coerceAtLeast(0)
+            val semester = coursesById[exam.courseId]?.semester ?: -1
+            day to semester
+        }
+        dailySemesterLimitWarnings = byDayAndSemester.values.count { it.size > 2 }
+
         proctors.forEach { proctor ->
             val proctorSlots = exams
                 .filter { exam -> exam.assignments.any { it.proctorId == proctor.uid } }
-                .map { slotIndexFromExam(it) }
+                .map { slotIndexFromExam(it, slotsPerDay = exams.maxOfOrNull { candidate -> candidate.slotId }?.coerceAtLeast(1) ?: 1) }
                 .sorted()
             proctorSlots.windowed(4).forEach { window ->
                 if (window.last() - window.first() == 3) consecutiveViolations += 1
             }
         }
+
+        val loadCounts = proctors.associate { user ->
+            user.uid to exams.count { exam -> exam.assignments.any { it.proctorId == user.uid } }
+        }.values
+        val proctorLoadImbalance = if (loadCounts.isEmpty()) 0 else (loadCounts.maxOrNull() ?: 0) - (loadCounts.minOrNull() ?: 0)
 
         return SolverMetrics(
             scheduledCourses = exams.size,
@@ -212,16 +255,34 @@ internal object SchedulingEngine {
             assignedCapacity = totalCapacity,
             capacityWaste = (totalCapacity - courses.filter { course -> exams.any { it.courseId == course.id } }.sumOf { it.studentCount }).coerceAtLeast(0),
             semesterConflicts = semesterConflicts,
+            dailySemesterLimitWarnings = dailySemesterLimitWarnings,
             capacityFailures = capacityFailures,
             proctorConflicts = proctorConflicts,
             excuseConflicts = excuseConflicts,
-            consecutiveViolations = consecutiveViolations
+            consecutiveViolations = consecutiveViolations,
+            proctorLoadImbalance = proctorLoadImbalance
         )
     }
 
-    private fun slotIndexFromExam(exam: Exam): Int {
+    private fun slotIndexFromExam(exam: Exam, slotsPerDay: Int): Int {
         val day = ((exam.date - firstExamDay) / dayMillis).toInt().coerceAtLeast(0)
-        return day * slotOffsets.size + (exam.slotId - 1).coerceAtLeast(0)
+        return day * slotsPerDay + (exam.slotId - 1).coerceAtLeast(0)
+    }
+
+    private fun normalizeSlotTimes(slotTimes: List<String>): List<String> {
+        val valid = slotTimes
+            .map { it.trim() }
+            .filter { it.matches(Regex("""^([01]\d|2[0-3]):([0-5]\d)$""")) }
+            .distinct()
+            .sortedBy { parseOffsetMs(it) }
+        return if (valid.isEmpty()) listOf("09:00", "11:00", "14:00", "16:00") else valid
+    }
+
+    private fun parseOffsetMs(time: String): Long {
+        val parts = time.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull() ?: 9
+        val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        return ((hour * 60L + minute) - (9 * 60L)).coerceAtLeast(0L) * 60_000L
     }
 
     private data class SlotPlan(

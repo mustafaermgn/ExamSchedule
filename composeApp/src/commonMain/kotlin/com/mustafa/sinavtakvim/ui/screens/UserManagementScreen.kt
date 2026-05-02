@@ -2,7 +2,9 @@ package com.mustafa.sinavtakvim.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.*
@@ -75,35 +77,47 @@ class UserManagementScreen : Screen {
 
                 // Filters
                 CorporateCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("İsim veya e-posta ile ara...") },
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = { Icon(Icons.Default.Search, null, tint = CorporateColors.Muted) },
-                            shape = MaterialTheme.shapes.medium
-                        )
-                        
-                        FilterChip(
-                            label = "Hepsi",
-                            selected = selectedRoleFilter == null,
-                            onClick = { selectedRoleFilter = null }
-                        )
-                        FilterChip(
-                            label = "Yöneticiler",
-                            selected = selectedRoleFilter == UserRole.ADMIN,
-                            onClick = { selectedRoleFilter = UserRole.ADMIN }
-                        )
-                        FilterChip(
-                            label = "Gözetmenler",
-                            selected = selectedRoleFilter == UserRole.PROCTOR,
-                            onClick = { selectedRoleFilter = UserRole.PROCTOR }
-                        )
+                    if (isDesktop) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = { Text("İsim veya e-posta ile ara...") },
+                                modifier = Modifier.weight(1f),
+                                leadingIcon = { Icon(Icons.Default.Search, null, tint = CorporateColors.Muted) },
+                                shape = MaterialTheme.shapes.medium
+                            )
+
+                            FilterChip("Hepsi", selectedRoleFilter == null) { selectedRoleFilter = null }
+                            FilterChip("Yöneticiler", selectedRoleFilter == UserRole.ADMIN) { selectedRoleFilter = UserRole.ADMIN }
+                            FilterChip("Gözetmenler", selectedRoleFilter == UserRole.PROCTOR) { selectedRoleFilter = UserRole.PROCTOR }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = { Text("İsim veya e-posta ile ara...") },
+                                modifier = Modifier.fillMaxWidth(),
+                                leadingIcon = { Icon(Icons.Default.Search, null, tint = CorporateColors.Muted) },
+                                shape = MaterialTheme.shapes.medium
+                            )
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                FilterChip("Hepsi", selectedRoleFilter == null) { selectedRoleFilter = null }
+                                FilterChip("Yöneticiler", selectedRoleFilter == UserRole.ADMIN) { selectedRoleFilter = UserRole.ADMIN }
+                                FilterChip("Gözetmenler", selectedRoleFilter == UserRole.PROCTOR) { selectedRoleFilter = UserRole.PROCTOR }
+                            }
+                        }
                     }
                 }
 
@@ -212,7 +226,7 @@ class UserManagementScreen : Screen {
         var name by remember { mutableStateOf("") }
         var email by remember { mutableStateOf("") }
         var role by remember { mutableStateOf(UserRole.PROCTOR) }
-        var password by remember { mutableStateOf("123456") }
+        var password by remember { mutableStateOf("") }
 
         AlertDialog(
             onDismissRequest = onDismiss,

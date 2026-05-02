@@ -15,7 +15,7 @@ data class User(
     val role: UserRole = UserRole.PROCTOR,
     val deptId: String = "",
     val excuses: List<DateRange> = emptyList(),
-    val password: String = "123456",
+    val password: String = "",
     val profileImageUrl: String = "",
     val phone: String = "",
     val preferences: Map<String, Boolean> = emptyMap()

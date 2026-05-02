@@ -3,7 +3,6 @@ package com.mustafa.sinavtakvim
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,13 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.Image
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.ImageBitmap
-import com.mustafa.sinavtakvim.shared.utils.toImageBitmap
-import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.Navigator
@@ -40,6 +34,10 @@ import com.mustafa.sinavtakvim.ui.screens.*
 import com.mustafa.sinavtakvim.ui.components.ModernHeader
 import org.koin.compose.koinInject
 
+object ThemeState {
+    var darkThemeEnabled by mutableStateOf(false)
+}
+
 @OptIn(ExperimentalEncodingApi::class)
 @Composable
 fun App() {
@@ -47,14 +45,17 @@ fun App() {
     val examRepository = koinInject<ExamRepository>()
     val userId = authRepository.currentUserId()
     var user by remember { mutableStateOf<User?>(null) }
-
     LaunchedEffect(userId) {
         user = examRepository.getUsers().find { it.uid == userId }
+        ThemeState.darkThemeEnabled = user?.preferences?.get("darkTheme") ?: false
     }
 
-    AppTheme(darkTheme = user?.preferences?.get("darkTheme") ?: false) {
+    AppTheme(darkTheme = ThemeState.darkThemeEnabled) {
         val startScreen: Screen = if (authRepository.isSignedIn()) {
-            MainScreen(authRepository.currentRole(), userId)
+            MainScreen(
+                role = authRepository.currentRole(),
+                userId = userId
+            )
         } else {
             LoginScreen()
         }
@@ -83,7 +84,7 @@ class MainScreen(
             user = examRepository.getUsers().find { it.uid == userId }
         }
         
-        val items = if (role == UserRole.ADMIN) {
+        val desktopItems = if (role == UserRole.ADMIN) {
             listOf(
                 NavItem("Panel", Icons.Default.Home),
                 NavItem("Veri", Icons.Default.Add),
@@ -99,6 +100,20 @@ class MainScreen(
                 NavItem("Salonlar", Icons.Default.LocationOn)
             )
         }
+        val mobileItems = if (role == UserRole.ADMIN) {
+            listOf(
+                NavItem("Panel", Icons.Default.Home),
+                NavItem("Veri", Icons.Default.Add),
+                NavItem("Plan", Icons.Default.Settings),
+                NavItem("Diğer", Icons.Default.MoreHoriz)
+            )
+        } else {
+            listOf(
+                NavItem("Görev", Icons.Default.Home),
+                NavItem("Takvim", Icons.Default.DateRange),
+                NavItem("Salon", Icons.Default.LocationOn)
+            )
+        }
 
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val isDesktop = this.maxWidth > 800.dp
@@ -110,50 +125,9 @@ class MainScreen(
                     NavigationRail(
                         backgroundColor = CorporateColors.Surface,
                         contentColor = CorporateColors.Primary,
-                        elevation = 8.dp,
-                        header = {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 16.dp)) {
-                                Surface(
-                                    modifier = Modifier.size(54.dp),
-                                    shape = CircleShape,
-                                    color = CorporateColors.Primary.copy(alpha = 0.1f),
-                                    elevation = 2.dp
-                                ) {
-                                    val bitmap = remember(user?.profileImageUrl) {
-                                        try {
-                                            if (!user?.profileImageUrl.isNullOrBlank()) {
-                                                Base64.decode(user!!.profileImageUrl).toImageBitmap()
-                                            } else null
-                                        } catch (_: Exception) { null }
-                                    }
-
-                                    if (bitmap != null) {
-                                        Image(
-                                            bitmap = bitmap,
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    } else {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(
-                                                (user?.name?.take(1) ?: "S").uppercase(),
-                                                color = CorporateColors.Primary,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    user?.name ?: (if (role == UserRole.ADMIN) "Admin" else "Gözetmen"),
-                                    style = MaterialTheme.typography.caption,
-                                    color = CorporateColors.Muted
-                                )
-                            }
-                        }
+                        elevation = 8.dp
                     ) {
-                        items.forEachIndexed { index, item ->
+                        desktopItems.forEachIndexed { index, item ->
                             NavigationRailItem(
                                 icon = { Icon(item.icon, contentDescription = item.label) },
                                 label = { Text(item.label, fontSize = 10.sp) },
@@ -163,26 +137,6 @@ class MainScreen(
                                 unselectedContentColor = CorporateColors.Muted
                             )
                         }
-                        
-                        Spacer(Modifier.weight(1f))
-                        
-                        NavigationRailItem(
-                            icon = { Icon(Icons.Default.Person, contentDescription = "Profil") },
-                            label = { Text("Profil") },
-                            selected = false,
-                            onClick = { navigator.push(ProfileScreen(userId)) }
-                        )
-                        NavigationRailItem(
-                            icon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Çıkış") },
-                            label = { Text("Çıkış") },
-                            selected = false,
-                            onClick = {
-                                scope.launch {
-                                    authRepository.logout()
-                                    navigator.replaceAll(LoginScreen())
-                                }
-                            }
-                        )
                     }
                     
                     // Main Content Area
@@ -215,6 +169,7 @@ class MainScreen(
                 }
             } else {
                 // Mobile Layout: Bottom Nav + Content
+                val mobileSelectedTab = selectedTab.coerceIn(0, mobileItems.lastIndex)
                 Scaffold(
                     topBar = {
                         ModernHeader(
@@ -237,14 +192,15 @@ class MainScreen(
                             contentColor = CorporateColors.Primary,
                             elevation = 8.dp
                         ) {
-                            items.forEachIndexed { index, item ->
+                            mobileItems.forEachIndexed { index, item ->
                                 BottomNavigationItem(
                                     icon = { Icon(item.icon, contentDescription = item.label) },
-                                    label = { Text(item.label, fontSize = 10.sp) },
-                                    selected = selectedTab == index,
+                                    label = { Text(item.label, fontSize = 10.sp, maxLines = 1) },
+                                    selected = mobileSelectedTab == index,
                                     onClick = { selectedTab = index },
                                     selectedContentColor = CorporateColors.Primary,
-                                    unselectedContentColor = CorporateColors.Muted
+                                    unselectedContentColor = CorporateColors.Muted,
+                                    alwaysShowLabel = false
                                 )
                             }
                         }
@@ -252,7 +208,21 @@ class MainScreen(
                 ) { padding ->
                     BackgroundGradient {
                         Box(Modifier.padding(padding)) {
-                            MainContent(role, selectedTab, userId)
+                            MobileContent(
+                                role = role,
+                                selectedTab = mobileSelectedTab,
+                                userId = userId,
+                                onOpenCalendar = { navigator.push(CalendarScreen(role = role, proctorId = if (role == UserRole.PROCTOR) userId else null)) },
+                                onOpenMap = { navigator.push(MapScreen(role = role, proctorId = if (role == UserRole.PROCTOR) userId else null)) },
+                                onOpenExcuses = { navigator.push(ExcuseManagementScreen()) },
+                                onOpenProfile = { navigator.push(ProfileScreen(userId)) },
+                                onLogout = {
+                                    scope.launch {
+                                        authRepository.logout()
+                                        navigator.replaceAll(LoginScreen())
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -276,6 +246,88 @@ class MainScreen(
                 0 -> ProctorHomeScreen(userId).Content()
                 1 -> CalendarScreen(role = role, proctorId = userId).Content()
                 2 -> MapScreen(role = role, proctorId = userId).Content()
+            }
+        }
+    }
+
+    @Composable
+    private fun MobileContent(
+        role: UserRole,
+        selectedTab: Int,
+        userId: String,
+        onOpenCalendar: () -> Unit,
+        onOpenMap: () -> Unit,
+        onOpenExcuses: () -> Unit,
+        onOpenProfile: () -> Unit,
+        onLogout: () -> Unit
+    ) {
+        if (role == UserRole.ADMIN) {
+            when (selectedTab) {
+                0 -> DashboardScreen().Content()
+                1 -> AdminDataScreen().Content()
+                2 -> PlanningScreen().Content()
+                3 -> MobileMoreScreen(
+                    onOpenCalendar = onOpenCalendar,
+                    onOpenMap = onOpenMap,
+                    onOpenExcuses = onOpenExcuses,
+                    onOpenProfile = onOpenProfile,
+                    onLogout = onLogout
+                )
+            }
+        } else {
+            MainContent(role, selectedTab, userId)
+        }
+    }
+
+    @Composable
+    private fun MobileMoreScreen(
+        onOpenCalendar: () -> Unit,
+        onOpenMap: () -> Unit,
+        onOpenExcuses: () -> Unit,
+        onOpenProfile: () -> Unit,
+        onLogout: () -> Unit
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Diğer", style = MaterialTheme.typography.h6, color = CorporateColors.Ink, fontWeight = FontWeight.Bold)
+            MobileActionCard("Sınav Takvimi", "Programı detaylı görüntüle", onOpenCalendar)
+            MobileActionCard("Salon Haritası", "Salon konumları ve atamalar", onOpenMap)
+            MobileActionCard("İzin Talepleri", "Eski onay ekranı", onOpenExcuses)
+            MobileActionCard("Profil ve Ayarlar", "Koyu tema ve bildirimler", onOpenProfile)
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = CorporateColors.Risk)
+                Spacer(Modifier.width(8.dp))
+                Text("Çıkış Yap", color = CorporateColors.Risk)
+            }
+        }
+    }
+
+    @Composable
+    private fun MobileActionCard(title: String, subtitle: String, onClick: () -> Unit) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            color = CorporateColors.Surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Text(title, color = CorporateColors.Ink, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, color = CorporateColors.Muted, style = MaterialTheme.typography.body2)
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+                    Text("Aç", color = CorporateColors.Primary)
+                }
             }
         }
     }

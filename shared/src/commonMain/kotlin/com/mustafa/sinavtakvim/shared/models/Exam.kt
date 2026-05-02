@@ -8,6 +8,7 @@ data class Exam(
     val courseId: String = "",
     val date: Long = 0L,
     val slotId: Int = 1,
+    val slotLabel: String = "",
     val assignments: List<Assignment> = emptyList(),
     val algorithm: String = "",
     val qualityScore: Double = 0.0,

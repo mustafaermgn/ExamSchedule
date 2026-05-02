@@ -273,7 +273,7 @@ class DashboardScreen : Screen {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(examDateLabel(exam.date), style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
                     Spacer(Modifier.height(4.dp))
-                    Text(slotLabel(exam.slotId), style = MaterialTheme.typography.h3, color = CorporateColors.Primary)
+                    Text(exam.slotLabel.ifBlank { slotLabel(exam.slotId) }, style = MaterialTheme.typography.h3, color = CorporateColors.Primary)
                 }
             }
         }

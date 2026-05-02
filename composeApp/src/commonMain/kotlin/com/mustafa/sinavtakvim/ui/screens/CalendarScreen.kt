@@ -232,7 +232,7 @@ class CalendarScreen(
                     
                     Row(Modifier.fillMaxWidth()) {
                         Cell("Tarih", examDateLabel(exam.date), Modifier.weight(1f))
-                        Cell("Saat", slotLabel(exam.slotId), Modifier.weight(1f))
+                        Cell("Saat", exam.slotLabel.ifBlank { slotLabel(exam.slotId) }, Modifier.weight(1f))
                     }
                     
                     Row(Modifier.fillMaxWidth()) {

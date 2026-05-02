@@ -12,7 +12,7 @@ service cloud.firestore {
 
     match /Users/{userId} {
       allow read: if signedIn();
-      allow create, update: if isAdmin() || request.auth.uid == userId;
+      allow create, update, delete: if isAdmin() || request.auth.uid == userId;
     }
 
     match /Courses/{courseId} {
@@ -33,6 +33,18 @@ service cloud.firestore {
     match /Logs/{logId} {
       allow read: if isAdmin();
       allow create: if signedIn();
+    }
+
+    match /Students/{studentId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /AdminCommands/{commandId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if false;
+      allow delete: if false;
     }
   }
 }

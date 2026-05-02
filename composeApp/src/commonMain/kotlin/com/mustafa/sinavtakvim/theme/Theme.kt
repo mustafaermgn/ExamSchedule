@@ -1,6 +1,5 @@
 package com.mustafa.sinavtakvim.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.darkColors
 import androidx.compose.material.lightColors
@@ -8,13 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val DarkColorPalette = darkColors(
-    primary = Color(0xFF17443D),
-    primaryVariant = Color(0xFF0F302B),
-    secondary = Color(0xFFB88343),
+    primary = Color(0xFF5FAF9E),
+    primaryVariant = Color(0xFF3E7C71),
+    secondary = Color(0xFFD1A66B),
     background = Color(0xFF101417),
     surface = Color(0xFF191F23),
     onPrimary = Color.White,
-    onSecondary = Color(0xFF1C1206),
+    onSecondary = Color(0xFF2B1B08),
     onBackground = Color(0xFFE8ECE7),
     onSurface = Color(0xFFE8ECE7),
 )
