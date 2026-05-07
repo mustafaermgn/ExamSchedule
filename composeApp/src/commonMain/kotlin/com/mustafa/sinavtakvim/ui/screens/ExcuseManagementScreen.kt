@@ -40,9 +40,7 @@ class ExcuseManagementScreen : Screen {
         val allRequests = users.flatMap { u -> u.excuses.map { u to it } }
             .sortedByDescending { it.second.start }
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val isDesktop = maxWidth > 800.dp
-
+        ResponsiveBox(Modifier.fillMaxSize(), breakpoint = 800.dp) { isDesktop ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()

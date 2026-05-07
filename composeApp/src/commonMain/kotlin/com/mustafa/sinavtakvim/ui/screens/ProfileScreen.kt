@@ -33,6 +33,7 @@ import com.mustafa.sinavtakvim.shared.models.User
 import com.mustafa.sinavtakvim.shared.utils.toImageBitmap
 import com.mustafa.sinavtakvim.ui.components.CorporateCard
 import com.mustafa.sinavtakvim.ui.components.CorporateColors
+import com.mustafa.sinavtakvim.ui.components.ResponsiveBox
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.core.PickerMode
 import io.github.vinceglb.filekit.core.PickerType
@@ -119,13 +120,13 @@ class ProfileScreen(
                 )
             }
         ) { paddingValues ->
-            BoxWithConstraints(
+            ResponsiveBox(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .background(CorporateColors.Background)
-            ) {
-                val isDesktop = this.maxWidth > 800.dp
+                    .background(CorporateColors.Background),
+                breakpoint = 800.dp
+            ) { isDesktop ->
                 val scrollState = rememberScrollState()
 
                 Column(

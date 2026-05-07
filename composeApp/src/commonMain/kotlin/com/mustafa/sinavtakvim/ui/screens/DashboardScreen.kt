@@ -56,9 +56,7 @@ class DashboardScreen : Screen {
         val plannedRatio = if (courses.isEmpty()) 0f else exams.size.toFloat() / courses.size
         val cleanPlan = latestResult?.violations?.isEmpty() != false
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val isDesktop = maxWidth > 800.dp
-
+        ResponsiveBox(Modifier.fillMaxSize(), breakpoint = 800.dp) { isDesktop ->
             Scaffold(
                 backgroundColor = Color.Transparent
             ) { padding ->

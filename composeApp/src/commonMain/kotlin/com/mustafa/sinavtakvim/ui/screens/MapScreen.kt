@@ -58,9 +58,7 @@ class MapScreen(
         val selectedRoom = rooms.firstOrNull { it.id == selectedRoomId } ?: rooms.firstOrNull()
         val roomExams = exams.filter { exam -> exam.assignments.any { it.roomId == selectedRoom?.id } }
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val isDesktop = this.maxWidth > 900.dp
-
+        ResponsiveBox(Modifier.fillMaxSize(), breakpoint = 900.dp) { isDesktop ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()

@@ -65,9 +65,7 @@ class CalendarScreen(
             matchesSearch && matchesSemester
         }
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val isDesktop = this.maxWidth > 800.dp
-
+        ResponsiveBox(Modifier.fillMaxSize(), breakpoint = 800.dp) { isDesktop ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()

@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -67,6 +66,7 @@ import com.mustafa.sinavtakvim.ui.components.CorporateColors
 import com.mustafa.sinavtakvim.ui.components.DividerLine
 import com.mustafa.sinavtakvim.ui.components.MetricCard
 import com.mustafa.sinavtakvim.ui.components.PageHeader
+import com.mustafa.sinavtakvim.ui.components.ResponsiveBox
 import com.mustafa.sinavtakvim.ui.components.SectionTitle
 import com.mustafa.sinavtakvim.ui.components.StatusPill
 import io.github.vinceglb.filekit.compose.rememberFilePickerLauncher
@@ -165,9 +165,7 @@ class AdminDataScreen : Screen {
             course.id to students.count { course.id in it.enrolledCourseIds }.coerceAtLeast(course.studentCount)
         }
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val isDesktop = maxWidth > 900.dp
-
+        ResponsiveBox(Modifier.fillMaxSize(), breakpoint = 900.dp) { isDesktop ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()

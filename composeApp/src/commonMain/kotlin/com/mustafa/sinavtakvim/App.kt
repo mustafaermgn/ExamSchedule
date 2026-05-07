@@ -32,6 +32,7 @@ import com.mustafa.sinavtakvim.ui.components.BackgroundGradient
 import com.mustafa.sinavtakvim.ui.components.CorporateColors
 import com.mustafa.sinavtakvim.ui.screens.*
 import com.mustafa.sinavtakvim.ui.components.ModernHeader
+import com.mustafa.sinavtakvim.ui.components.ResponsiveBox
 import org.koin.compose.koinInject
 
 object ThemeState {
@@ -115,9 +116,7 @@ class MainScreen(
             )
         }
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val isDesktop = this.maxWidth > 800.dp
-            
+        ResponsiveBox(Modifier.fillMaxSize(), breakpoint = 800.dp) { isDesktop ->
             if (isDesktop) {
                 // Desktop Layout: Sidebar + Content
                 Row(Modifier.fillMaxSize()) {

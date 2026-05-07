@@ -57,6 +57,7 @@ class ExamRepository {
         return localExams.toList()
     }
 
+    @Suppress("unused")
     suspend fun getLogs(): List<LogEntry> {
         if (localLogs.isNotEmpty()) return localLogs.toList()
         val remote = readCollection<LogEntry>(COLLECTION_LOGS)
@@ -72,8 +73,9 @@ class ExamRepository {
         } catch (_: Exception) {
             null
         }
-        localSlotConfig = remote ?: SlotConfig()
-        return localSlotConfig ?: SlotConfig()
+        val config = remote ?: SlotConfig()
+        localSlotConfig = config
+        return config
     }
 
     suspend fun saveSlotConfig(slotConfig: SlotConfig) {
@@ -81,6 +83,7 @@ class ExamRepository {
         firestore.collection(COLLECTION_ADMIN_COMMANDS).document(DOC_SLOT_CONFIG).set(slotConfig)
     }
 
+    @Suppress("unused")
     fun observeExams(): Flow<List<Exam>> = flow { emit(getExams()) }
 
     suspend fun addCourse(course: Course) {
@@ -117,6 +120,7 @@ class ExamRepository {
         addUser(user.copy(excuses = updatedExcuses))
     }
 
+    @Suppress("unused")
     suspend fun writeLog(log: LogEntry) {
         upsertLocal(localLogs, log) { it.id }
         firestore.collection(COLLECTION_LOGS).document(log.id).set(log)

@@ -20,11 +20,14 @@ import com.mustafa.sinavtakvim.shared.data.repository.AuthRepository
 import com.mustafa.sinavtakvim.shared.models.UserRole
 import com.mustafa.sinavtakvim.ui.components.CorporateColors
 import com.mustafa.sinavtakvim.ui.components.DividerLine
+import com.mustafa.sinavtakvim.ui.components.ResponsiveBox
 import com.mustafa.sinavtakvim.ui.components.StatusPill
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.koinInject
 
 class LoginScreen : Screen {
+
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -37,9 +40,7 @@ class LoginScreen : Screen {
         var isLoading by remember { mutableStateOf(false) }
         var message by remember { mutableStateOf<String?>(null) }
 
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val isDesktop = this.maxWidth > 900.dp
-
+        ResponsiveBox(Modifier.fillMaxSize(), breakpoint = 900.dp) { isDesktop ->
             if (isDesktop) {
                 // Desktop Split Layout
                 Row(Modifier.fillMaxSize()) {

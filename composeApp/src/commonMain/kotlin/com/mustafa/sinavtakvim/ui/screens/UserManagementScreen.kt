@@ -23,6 +23,7 @@ import com.mustafa.sinavtakvim.shared.models.User
 import com.mustafa.sinavtakvim.shared.models.UserRole
 import com.mustafa.sinavtakvim.ui.components.CorporateCard
 import com.mustafa.sinavtakvim.ui.components.CorporateColors
+import com.mustafa.sinavtakvim.ui.components.ResponsiveBox
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -46,9 +47,10 @@ class UserManagementScreen : Screen {
             (selectedRoleFilter == null || user.role == selectedRoleFilter)
         }
 
-        BoxWithConstraints(Modifier.fillMaxSize().background(CorporateColors.Background)) {
-            val isDesktop = maxWidth > 800.dp
-            
+        ResponsiveBox(
+            modifier = Modifier.fillMaxSize().background(CorporateColors.Background),
+            breakpoint = 800.dp
+        ) { isDesktop ->
             Column(Modifier.fillMaxSize().padding(if (isDesktop) 32.dp else 16.dp)) {
                 // Header
                 Row(

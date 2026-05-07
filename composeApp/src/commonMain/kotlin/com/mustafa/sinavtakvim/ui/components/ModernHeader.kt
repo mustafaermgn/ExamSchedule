@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -62,8 +61,8 @@ fun ModernHeader(
         }
     )
 
-    BoxWithConstraints {
-        val isCompact = maxWidth < 700.dp
+    ResponsiveBox(breakpoint = 700.dp) { isWide ->
+        val isCompact = !isWide
 
         Surface(modifier = Modifier.fillMaxWidth(), elevation = 8.dp) {
             Box(

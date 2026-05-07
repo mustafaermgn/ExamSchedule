@@ -60,8 +60,6 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
             exam.assignments.filter { it.proctorId == proctorId }.mapNotNull { rooms[it.roomId] }
         }.distinctBy { it.id }
 
-        // BoxWithConstraints'i kaldırıp direkt Column ile devam ediyoruz
-        // veya constraints'i kullanarak responsive tasarım yapıyoruz
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -77,12 +75,10 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
 
                 Spacer(Modifier.height(24.dp))
 
-                // Responsive layout için BoxWithConstraints kullanıyoruz ama constraints'i kullanarak
-                BoxWithConstraints(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val isDesktop = maxWidth > 800.dp
-
+                ResponsiveBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    breakpoint = 800.dp
+                ) { isDesktop ->
                     if (isDesktop) {
                         DesktopProctorLayout(
                             exams = exams,
