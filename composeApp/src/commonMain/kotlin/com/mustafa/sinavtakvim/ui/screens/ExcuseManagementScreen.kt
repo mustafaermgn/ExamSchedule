@@ -17,6 +17,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import com.mustafa.sinavtakvim.shared.data.repository.ExamRepository
 import com.mustafa.sinavtakvim.shared.models.User
 import com.mustafa.sinavtakvim.shared.utils.examDateLabel
+import com.mustafa.sinavtakvim.shared.utils.timeLabel
 import com.mustafa.sinavtakvim.ui.components.*
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -129,7 +130,7 @@ class ExcuseManagementScreen : Screen {
                     Spacer(Modifier.height(12.dp))
                     DividerLine()
                     Spacer(Modifier.height(12.dp))
-                    Text("Tarih: ${examDateLabel(excuse.start)}", fontWeight = FontWeight.Bold, color = CorporateColors.Ink)
+                    Text("Zaman: ${examDateLabel(excuse.start)} ${timeLabel(excuse.start)} - ${timeLabel(excuse.end)}", fontWeight = FontWeight.Bold, color = CorporateColors.Ink)
                     Text("Gerekçe: ${excuse.note}", style = MaterialTheme.typography.body2, color = CorporateColors.Ink)
                 }
 

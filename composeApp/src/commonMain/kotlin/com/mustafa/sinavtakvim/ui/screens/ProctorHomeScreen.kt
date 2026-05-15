@@ -22,6 +22,7 @@ import com.mustafa.sinavtakvim.shared.models.User
 import com.mustafa.sinavtakvim.shared.utils.addToCalendar
 import com.mustafa.sinavtakvim.shared.utils.examDateLabel
 import com.mustafa.sinavtakvim.shared.utils.slotLabel
+import com.mustafa.sinavtakvim.shared.utils.timeLabel
 import com.mustafa.sinavtakvim.ui.components.*
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -39,6 +40,8 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         // Excuse form state
         var excuseNote by remember { mutableStateOf("") }
         var excuseDate by remember { mutableStateOf("") }
+        var excuseStartTime by remember { mutableStateOf("09:00") }
+        var excuseEndTime by remember { mutableStateOf("17:00") }
         var excuseMessage by remember { mutableStateOf("") }
         var excuseError by remember { mutableStateOf(false) }
 
@@ -62,14 +65,19 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         }.distinctBy { it.id }
 
         fun submitExcuseRequest() {
-            val start = parseExcuseDateMillis(excuseDate)
+            val start = parseExcuseDateTimeMillis(excuseDate, excuseStartTime)
+            val end = parseExcuseDateTimeMillis(excuseDate, excuseEndTime)
             when {
-                start == null -> {
-                    excuseMessage = "Tarih formatÄ±: 18.05.2026 veya 2026-05-18"
+                start == null || end == null -> {
+                    excuseMessage = "Tarih/saat formatı: 2026-05-18, 09:00"
+                    excuseError = true
+                }
+                end <= start -> {
+                    excuseMessage = "Bitiş saati başlangıçtan sonra olmalıdır."
                     excuseError = true
                 }
                 excuseNote.isBlank() -> {
-                    excuseMessage = "Mazeret aÃ§Ä±klamasÄ± zorunludur."
+                    excuseMessage = "Mazeret açıklaması zorunludur."
                     excuseError = true
                 }
                 else -> {
@@ -78,13 +86,15 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                             proctorId,
                             DateRange(
                                 start = start,
-                                end = start + EXCUSE_DURATION_MILLIS,
+                                end = end,
                                 note = excuseNote.trim()
                             )
                         )
                         excuseNote = ""
                         excuseDate = ""
-                        excuseMessage = "Talebiniz yÃ¶neticiye iletildi."
+                        excuseStartTime = "09:00"
+                        excuseEndTime = "17:00"
+                        excuseMessage = "Talebiniz yöneticiye iletildi."
                         excuseError = false
                         loadData()
                     }
@@ -122,6 +132,10 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                             excuses = user?.excuses.orEmpty(),
                             excuseDate = excuseDate,
                             onExcuseDateChange = { excuseDate = it },
+                            excuseStartTime = excuseStartTime,
+                            onExcuseStartTimeChange = { excuseStartTime = it },
+                            excuseEndTime = excuseEndTime,
+                            onExcuseEndTimeChange = { excuseEndTime = it },
                             excuseNote = excuseNote,
                             onExcuseNoteChange = { excuseNote = it },
                             onExcuseSubmit = { submitExcuseRequest() },
@@ -139,6 +153,10 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                             excuses = user?.excuses.orEmpty(),
                             excuseDate = excuseDate,
                             onExcuseDateChange = { excuseDate = it },
+                            excuseStartTime = excuseStartTime,
+                            onExcuseStartTimeChange = { excuseStartTime = it },
+                            excuseEndTime = excuseEndTime,
+                            onExcuseEndTimeChange = { excuseEndTime = it },
                             excuseNote = excuseNote,
                             onExcuseNoteChange = { excuseNote = it },
                             onExcuseSubmit = { submitExcuseRequest() },
@@ -162,6 +180,10 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         excuses: List<DateRange>,
         excuseDate: String,
         onExcuseDateChange: (String) -> Unit,
+        excuseStartTime: String,
+        onExcuseStartTimeChange: (String) -> Unit,
+        excuseEndTime: String,
+        onExcuseEndTimeChange: (String) -> Unit,
         excuseNote: String,
         onExcuseNoteChange: (String) -> Unit,
         onExcuseSubmit: () -> Unit,
@@ -208,10 +230,27 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                         OutlinedTextField(
                             value = excuseDate,
                             onValueChange = onExcuseDateChange,
-                            label = { Text("Tarih (18.05.2026)") },
+                            label = { Text("Tarih (2026-05-18)") },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(
+                                value = excuseStartTime,
+                                onValueChange = onExcuseStartTimeChange,
+                                label = { Text("Başlangıç") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = excuseEndTime,
+                                onValueChange = onExcuseEndTimeChange,
+                                label = { Text("Bitiş") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                        }
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
                             value = excuseNote,
@@ -263,6 +302,10 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         excuses: List<DateRange>,
         excuseDate: String,
         onExcuseDateChange: (String) -> Unit,
+        excuseStartTime: String,
+        onExcuseStartTimeChange: (String) -> Unit,
+        excuseEndTime: String,
+        onExcuseEndTimeChange: (String) -> Unit,
         excuseNote: String,
         onExcuseNoteChange: (String) -> Unit,
         onExcuseSubmit: () -> Unit,
@@ -295,10 +338,27 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                     OutlinedTextField(
                         value = excuseDate,
                         onValueChange = onExcuseDateChange,
-                        label = { Text("Tarih (18.05.2026)") },
+                        label = { Text("Tarih (2026-05-18)") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = excuseStartTime,
+                            onValueChange = onExcuseStartTimeChange,
+                            label = { Text("Başlangıç") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = excuseEndTime,
+                            onValueChange = onExcuseEndTimeChange,
+                            label = { Text("Bitiş") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = excuseNote,
@@ -402,6 +462,7 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(examDateLabel(excuse.start), fontWeight = FontWeight.SemiBold, color = CorporateColors.Ink)
+                    Text("${timeLabel(excuse.start)} - ${timeLabel(excuse.end)}", style = MaterialTheme.typography.caption, color = CorporateColors.Primary)
                     Text(excuse.note.ifBlank { "Aciklama yok" }, style = MaterialTheme.typography.caption, color = CorporateColors.Muted)
                 }
                 StatusPill(text, color)
@@ -417,31 +478,68 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         }
     }
 
-    private fun parseExcuseDateMillis(raw: String): Long? {
+    private fun parseExcuseDateTimeMillis(rawDate: String, rawTime: String): Long? {
+        val date = parseDate(rawDate) ?: return null
+        val minutes = parseTimeMinutes(rawTime) ?: return null
+        return date.toEpochDay() * DAY_MILLIS - TURKEY_OFFSET_MILLIS + minutes * 60_000L
+    }
+
+    private fun parseDate(raw: String): SimpleDate? {
         val value = raw.trim()
         if (value.isBlank()) return null
 
         val parts = when {
-            value.contains("-") -> value.split("-").mapNotNull { it.toIntOrNull() }.let { parsed ->
+            value.contains("-") && value.substringBefore("-").length == 4 -> value.split("-").mapNotNull { it.toIntOrNull() }.let { parsed ->
                 if (parsed.size == 3) listOf(parsed[2], parsed[1], parsed[0]) else emptyList()
             }
+            value.contains("-") -> value.split("-").mapNotNull { it.toIntOrNull() }
             value.contains(".") -> value.split(".").mapNotNull { it.toIntOrNull() }
             value.contains("/") -> value.split("/").mapNotNull { it.toIntOrNull() }
-            else -> listOfNotNull(value.toIntOrNull(), 5, 2026)
+            else -> emptyList()
         }
         if (parts.size != 3) return null
 
         val day = parts[0]
         val month = parts[1]
         val year = parts[2]
-        if (year != 2026 || month != 5 || day < 5 || day > 31) return null
+        if (month !in 1..12 || day !in 1..daysInMonth(year, month)) return null
 
-        return FIRST_EXAM_DAY_MILLIS + (day - 5) * DAY_MILLIS
+        return SimpleDate(year, month, day)
     }
 
+    private fun parseTimeMinutes(raw: String): Int? {
+        val parts = raw.trim().split(":")
+        if (parts.size != 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return hour * 60 + minute
+    }
+
+    private fun SimpleDate.toEpochDay(): Long {
+        var days = 0L
+        for (year in 1970 until this.year) days += if (isLeapYear(year)) 366 else 365
+        for (month in 1 until this.month) days += daysInMonth(this.year, month)
+        return days + this.day - 1
+    }
+
+    private fun daysInMonth(year: Int, month: Int): Int {
+        return when (month) {
+            1, 3, 5, 7, 8, 10, 12 -> 31
+            4, 6, 9, 11 -> 30
+            2 -> if (isLeapYear(year)) 29 else 28
+            else -> 0
+        }
+    }
+
+    private fun isLeapYear(year: Int): Boolean {
+        return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+    }
+
+    private data class SimpleDate(val year: Int, val month: Int, val day: Int)
+
     private companion object {
-        const val FIRST_EXAM_DAY_MILLIS = 1_777_960_800_000L
         const val DAY_MILLIS = 86_400_000L
-        const val EXCUSE_DURATION_MILLIS = 90 * 60 * 1000L
+        const val TURKEY_OFFSET_MILLIS = 3 * 60 * 60 * 1000L
     }
 }

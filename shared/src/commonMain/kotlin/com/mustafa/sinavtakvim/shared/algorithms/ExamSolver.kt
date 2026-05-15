@@ -10,7 +10,8 @@ interface ExamSolver {
         courses: List<Course>,
         rooms: List<Room>,
         proctors: List<User>,
-        slotTimes: List<String> = listOf("09:00", "11:00", "14:00", "16:00")
+        slotTimes: List<String> = listOf("09:00", "11:00", "14:00", "16:00"),
+        examDays: List<Long> = emptyList()
     ): SolverResult
 }
 
@@ -31,6 +32,7 @@ data class SolverMetrics(
     val capacityWaste: Int = 0,
     val semesterConflicts: Int = 0,
     val dailySemesterLimitWarnings: Int = 0,
+    val roomConflicts: Int = 0,
     val capacityFailures: Int = 0,
     val proctorConflicts: Int = 0,
     val excuseConflicts: Int = 0,

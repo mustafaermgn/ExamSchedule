@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -57,13 +58,18 @@ class AdminDataScreen : Screen {
         var roomName by remember { mutableStateOf("") }
         var roomCapacity by remember { mutableStateOf("") }
         var roomFloor by remember { mutableStateOf("") }
+        var roomBuilding by remember { mutableStateOf("Mühendislik Fakültesi") }
+        var roomLatitude by remember { mutableStateOf("") }
+        var roomLongitude by remember { mutableStateOf("") }
 
         var selectedCourseId by remember { mutableStateOf("") }
+        var editingCourseId by remember { mutableStateOf<String?>(null) }
+        var editingRoomId by remember { mutableStateOf<String?>(null) }
 
-        suspend fun load() {
-            courses = repository.getCourses().sortedBy { it.code }
-            rooms = repository.getRooms().sortedBy { it.name }
-            users = repository.getUsers().sortedBy { it.name }
+        suspend fun load(forceRefresh: Boolean = false) {
+            courses = repository.getCourses(forceRefresh).sortedBy { it.code }
+            rooms = repository.getRooms(forceRefresh).sortedBy { it.name }
+            users = repository.getUsers(forceRefresh).sortedBy { it.name }
             if (selectedCourseId.isBlank()) selectedCourseId = courses.firstOrNull()?.id.orEmpty()
         }
 
@@ -78,12 +84,21 @@ class AdminDataScreen : Screen {
                 scope.launch {
                     busy = true
                     try {
+                        val courseId = selectedCourseId
+                        if (courseId.isBlank()) {
+                            message = "Önce öğrenci listesi yüklenecek dersi seçin."
+                            return@launch
+                        }
                         val result = withContext(Dispatchers.Default) {
                             parseStudentSpreadsheet(file.readBytes(), file.name)
                         }
-                        repository.enrollStudentsInCourse(selectedCourseId, result.students)
-                        message = "${result.students.size} öğrenci başarıyla yüklendi."
-                        load()
+                        if (result.students.isEmpty()) {
+                            message = "Hata: 0 öğrenci bulundu. " + (result.warnings.firstOrNull() ?: "Dosya formatını kontrol edin.")
+                        } else {
+                            repository.enrollStudentsInCourse(courseId, result.students)
+                            message = "${result.students.size} öğrenci başarıyla yüklendi."
+                            load(true)
+                        }
                     } catch (e: Exception) {
                         message = "Hata: ${e.message}"
                     } finally {
@@ -127,12 +142,25 @@ class AdminDataScreen : Screen {
             Surface(elevation = 4.dp, color = CorporateColors.Surface) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TabItem("Dersler", Icons.Default.Book, activeTab == 0) { activeTab = 0 }
-                    TabItem("Salonlar", Icons.Default.MeetingRoom, activeTab == 1) { activeTab = 1 }
-                    TabItem("Gözetmenler", Icons.Default.People, activeTab == 2) { activeTab = 2 }
-                    TabItem("Yedekleme", Icons.Default.Backup, activeTab == 3) { activeTab = 3 }
+                    Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TabItem("Dersler", Icons.Default.Book, activeTab == 0) { activeTab = 0 }
+                        TabItem("Salonlar", Icons.Default.MeetingRoom, activeTab == 1) { activeTab = 1 }
+                        TabItem("Gözetmenler", Icons.Default.People, activeTab == 2) { activeTab = 2 }
+                        TabItem("Yedekleme", Icons.Default.Backup, activeTab == 3) { activeTab = 3 }
+                    }
+
+                    IconButton(onClick = {
+                        scope.launch {
+                            busy = true
+                            load(true)
+                            busy = false
+                            message = "Veriler güncellendi."
+                        }
+                    }) {
+                        Icon(Icons.Default.Refresh, "Yenile", tint = CorporateColors.Primary)
+                    }
                 }
             }
 
@@ -154,10 +182,30 @@ class AdminDataScreen : Screen {
                         onDeptChange = { departmentId = it },
                         instructor = instructorName,
                         onInsChange = { instructorName = it },
+                        isEditing = editingCourseId != null,
+                        onEditCourse = { course ->
+                            editingCourseId = course.id
+                            courseCode = course.code
+                            courseName = course.name
+                            semester = course.semester.toString()
+                            departmentId = course.departmentId
+                            instructorName = course.instructorName
+                        },
+                        onDeleteCourse = { id ->
+                            scope.launch {
+                                repository.deleteCourse(id)
+                                load(true)
+                                message = "Ders silindi."
+                            }
+                        },
+                        onCancelEdit = {
+                            editingCourseId = null
+                            courseCode = ""; courseName = ""; semester = ""; instructorName = ""
+                        },
                         onSaveCourse = {
                             scope.launch {
                                 val course = Course(
-                                    id = courseCode.uppercase(),
+                                    id = editingCourseId ?: courseCode.uppercase(),
                                     code = courseCode.uppercase(),
                                     name = courseName,
                                     semester = semester.toIntOrNull() ?: 1,
@@ -165,8 +213,9 @@ class AdminDataScreen : Screen {
                                     instructorName = instructorName
                                 )
                                 repository.addCourse(course)
-                                load()
-                                message = "Ders eklendi."
+                                load(true)
+                                message = if (editingCourseId != null) "Ders güncellendi." else "Ders eklendi."
+                                editingCourseId = null
                                 courseCode = ""; courseName = ""; semester = ""; instructorName = ""
                             }
                         }
@@ -179,18 +228,51 @@ class AdminDataScreen : Screen {
                         onCapChange = { roomCapacity = it },
                         floor = roomFloor,
                         onFloorChange = { roomFloor = it },
+                        building = roomBuilding,
+                        onBuildingChange = { roomBuilding = it },
+                        latitude = roomLatitude,
+                        onLatitudeChange = { roomLatitude = it },
+                        longitude = roomLongitude,
+                        onLongitudeChange = { roomLongitude = it },
+                        isEditing = editingRoomId != null,
+                        onEditRoom = { room ->
+                            editingRoomId = room.id
+                            roomName = room.name
+                            roomCapacity = room.capacity.toString()
+                            roomFloor = room.floor.toString()
+                            roomBuilding = room.building
+                            roomLatitude = room.latitude.takeIf { it != 0.0 }?.toString().orEmpty()
+                            roomLongitude = room.longitude.takeIf { it != 0.0 }?.toString().orEmpty()
+                        },
+                        onDeleteRoom = { id ->
+                            scope.launch {
+                                repository.deleteRoom(id)
+                                load(true)
+                                message = "Salon silindi."
+                            }
+                        },
+                        onCancelEdit = {
+                            editingRoomId = null
+                            roomName = ""; roomCapacity = ""; roomFloor = ""
+                            roomBuilding = "Mühendislik Fakültesi"; roomLatitude = ""; roomLongitude = ""
+                        },
                         onSaveRoom = {
                             scope.launch {
                                 val room = Room(
-                                    id = roomName,
+                                    id = editingRoomId ?: roomName,
                                     name = roomName,
                                     capacity = roomCapacity.toIntOrNull() ?: 30,
-                                    floor = roomFloor.toIntOrNull() ?: 0
+                                    floor = roomFloor.toIntOrNull() ?: 0,
+                                    latitude = roomLatitude.replace(',', '.').toDoubleOrNull() ?: 0.0,
+                                    longitude = roomLongitude.replace(',', '.').toDoubleOrNull() ?: 0.0,
+                                    building = roomBuilding.ifBlank { "Mühendislik Fakültesi" }
                                 )
                                 repository.addRoom(room)
-                                load()
-                                message = "Salon eklendi."
+                                load(true)
+                                message = if (editingRoomId != null) "Salon güncellendi." else "Salon eklendi."
+                                editingRoomId = null
                                 roomName = ""; roomCapacity = ""; roomFloor = ""
+                                roomBuilding = "Mühendislik Fakültesi"; roomLatitude = ""; roomLongitude = ""
                             }
                         }
                     )
@@ -270,15 +352,19 @@ class AdminDataScreen : Screen {
         semester: String, onSemChange: (String) -> Unit,
         department: String, onDeptChange: (String) -> Unit,
         instructor: String, onInsChange: (String) -> Unit,
+        isEditing: Boolean,
+        onEditCourse: (Course) -> Unit,
+        onDeleteCourse: (String) -> Unit,
+        onCancelEdit: () -> Unit,
         onSaveCourse: () -> Unit
     ) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
                 CorporateCard {
-                    Text("Yeni Ders Ekle", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
+                    Text(if (isEditing) "Dersi Düzenle" else "Yeni Ders Ekle", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(courseCode, onCodeChange, label = { Text("Kod") }, modifier = Modifier.weight(1f))
+                        OutlinedTextField(courseCode, onCodeChange, label = { Text("Kod") }, modifier = Modifier.weight(1f), enabled = !isEditing)
                         OutlinedTextField(semester, onSemChange, label = { Text("Dönem") }, modifier = Modifier.width(80.dp))
                     }
                     Spacer(Modifier.height(8.dp))
@@ -288,8 +374,15 @@ class AdminDataScreen : Screen {
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(instructor, onInsChange, label = { Text("Sorumlu") }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(16.dp))
-                    Button(onSaveCourse, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(CorporateColors.Primary)) {
-                        Text("Dersi Kaydet", color = Color.White)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (isEditing) {
+                            OutlinedButton(onCancelEdit, modifier = Modifier.weight(1f)) {
+                                Text("Vazgeç")
+                            }
+                        }
+                        Button(onSaveCourse, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(CorporateColors.Primary)) {
+                            Text(if (isEditing) "Güncelle" else "Dersi Kaydet", color = Color.White)
+                        }
                     }
                 }
             }
@@ -297,27 +390,44 @@ class AdminDataScreen : Screen {
                 CorporateCard {
                     Text("Ders Havuzu ve Öğrenci Listeleri", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
                     Spacer(Modifier.height(16.dp))
-                    courses.forEach { course ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectCourse(course.id) }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(selectedCourseId == course.id, onClick = { onSelectCourse(course.id) })
-                            Column(Modifier.weight(1f)) {
-                                Text(course.code, fontWeight = FontWeight.Bold)
-                                Text(course.name, style = MaterialTheme.typography.caption)
-                            }
-                            StatusPill(
-                                text = if (course.studentCount > 0) "${course.studentCount} Öğr." else "Liste Yok",
-                                color = if (course.studentCount > 0) CorporateColors.Success else CorporateColors.Amber
-                            )
-                        }
-                        DividerLine()
+                    if (courses.isEmpty()) {
+                        Text("Henüz ders eklenmemiş.", color = CorporateColors.Muted, modifier = Modifier.padding(vertical = 16.dp))
                     }
-                    Spacer(Modifier.height(16.dp))
+                }
+            }
+            items(courses) { course ->
+                CorporateCard(Modifier.padding(horizontal = 4.dp)) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selectedCourseId == course.id, onClick = { onSelectCourse(course.id) })
+                        Column(Modifier.weight(1f).clickable { onSelectCourse(course.id) }) {
+                            Text(course.code, fontWeight = FontWeight.Bold, color = CorporateColors.Ink)
+                            Text(course.name, style = MaterialTheme.typography.caption, color = CorporateColors.Muted)
+                        }
+
+                        Row {
+                            IconButton(onClick = { onEditCourse(course) }) {
+                                Icon(Icons.Default.Edit, "Düzenle", tint = CorporateColors.Primary, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(onClick = { onDeleteCourse(course.id) }) {
+                                Icon(Icons.Default.Delete, "Sil", tint = CorporateColors.Risk, modifier = Modifier.size(20.dp))
+                            }
+                        }
+
+                        StatusPill(
+                            text = if (course.studentCount > 0) "${course.studentCount} Öğr." else "Liste Yok",
+                            color = if (course.studentCount > 0) CorporateColors.Success else CorporateColors.Amber
+                        )
+                    }
+                }
+            }
+            item {
+                CorporateCard {
+                    Spacer(Modifier.height(8.dp))
                     Button(
                         onUploadStudents,
                         enabled = selectedCourseId.isNotBlank() && !busy,
@@ -325,7 +435,11 @@ class AdminDataScreen : Screen {
                         colors = ButtonDefaults.buttonColors(CorporateColors.Steel)
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = Color.White)
-                        else Text("Seçili Derse Excel Yükle", color = Color.White)
+                        else {
+                            Icon(Icons.Default.UploadFile, null, tint = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Seçili Derse Excel Yükle", color = Color.White)
+                        }
                     }
                 }
             }
@@ -338,35 +452,67 @@ class AdminDataScreen : Screen {
         roomName: String, onNameChange: (String) -> Unit,
         capacity: String, onCapChange: (String) -> Unit,
         floor: String, onFloorChange: (String) -> Unit,
+        building: String, onBuildingChange: (String) -> Unit,
+        latitude: String, onLatitudeChange: (String) -> Unit,
+        longitude: String, onLongitudeChange: (String) -> Unit,
+        isEditing: Boolean,
+        onEditRoom: (Room) -> Unit,
+        onDeleteRoom: (String) -> Unit,
+        onCancelEdit: () -> Unit,
         onSaveRoom: () -> Unit
     ) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
                 CorporateCard {
-                    Text("Yeni Salon Ekle", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
+                    Text(if (isEditing) "Salonu Düzenle" else "Yeni Salon Ekle", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
                     Spacer(Modifier.height(16.dp))
-                    OutlinedTextField(roomName, onNameChange, label = { Text("Salon Adı") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(roomName, onNameChange, label = { Text("Salon Adı") }, modifier = Modifier.fillMaxWidth(), enabled = !isEditing)
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedTextField(capacity, onCapChange, label = { Text("Kapasite") }, modifier = Modifier.weight(1f))
                         OutlinedTextField(floor, onFloorChange, label = { Text("Kat") }, modifier = Modifier.weight(1f))
                     }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(building, onBuildingChange, label = { Text("Bina / Konum") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(latitude, onLatitudeChange, label = { Text("Enlem") }, modifier = Modifier.weight(1f))
+                        OutlinedTextField(longitude, onLongitudeChange, label = { Text("Boylam") }, modifier = Modifier.weight(1f))
+                    }
                     Spacer(Modifier.height(16.dp))
-                    Button(onSaveRoom, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(CorporateColors.Primary)) {
-                        Text("Salonu Kaydet", color = Color.White)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (isEditing) {
+                            OutlinedButton(onCancelEdit, modifier = Modifier.weight(1f)) {
+                                Text("Vazgeç")
+                            }
+                        }
+                        Button(onSaveRoom, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(CorporateColors.Primary)) {
+                            Text(if (isEditing) "Güncelle" else "Salonu Kaydet", color = Color.White)
+                        }
                     }
                 }
             }
-            item {
-                CorporateCard {
-                    Text("Mevcut Salonlar", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
-                    Spacer(Modifier.height(12.dp))
-                    rooms.forEach { room ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(room.name, fontWeight = FontWeight.Bold)
-                            Text("Kapasite: ${room.capacity}", color = CorporateColors.Muted)
+            items(rooms) { room ->
+                CorporateCard(Modifier.padding(horizontal = 4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(room.name, fontWeight = FontWeight.Bold, color = CorporateColors.Ink)
+                            Text("${room.building} · ${room.floor}. Kat · ${room.capacity} Kişilik", style = MaterialTheme.typography.caption, color = CorporateColors.Muted)
                         }
-                        DividerLine()
+
+                        Row {
+                            IconButton(onClick = { onEditRoom(room) }) {
+                                Icon(Icons.Default.Edit, "Düzenle", tint = CorporateColors.Primary, modifier = Modifier.size(20.dp))
+                            }
+                            IconButton(onClick = { onDeleteRoom(room.id) }) {
+                                Icon(Icons.Default.Delete, "Sil", tint = CorporateColors.Risk, modifier = Modifier.size(20.dp))
+                            }
+                        }
+
+                        StatusPill(text = "Salon", color = CorporateColors.Steel)
                     }
                 }
             }
@@ -397,9 +543,9 @@ class AdminDataScreen : Screen {
                         Text("Yönet", color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
                     }
                 }
-                
+
                 Spacer(Modifier.height(16.dp))
-                
+
                 if (proctors.isEmpty()) {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Text("Kayıtlı gözetmen bulunamadı.", color = CorporateColors.Muted)

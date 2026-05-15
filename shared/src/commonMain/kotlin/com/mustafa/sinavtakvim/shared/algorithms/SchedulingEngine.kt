@@ -17,11 +17,18 @@ internal object SchedulingEngine {
         rooms: List<Room>,
         proctors: List<User>,
         slotTimes: List<String>,
+        examDays: List<Long>,
         selectRooms: (target: Int, rooms: List<Room>) -> List<Room>
     ): SolverResult {
         val normalizedSlotTimes = normalizeSlotTimes(slotTimes)
         val slotOffsets = normalizedSlotTimes.map { parseOffsetMs(it) }
         val slotsPerDay = slotOffsets.size
+        val allowedExamDays = examDays.distinct().sorted()
+        val maxSlot = if (allowedExamDays.isEmpty()) {
+            (courses.size * 3).coerceAtLeast(16)
+        } else {
+            allowedExamDays.size * slotsPerDay
+        }
         val cleanCourses = courses.filter { it.id.isNotBlank() && it.studentCount > 0 }
         val cleanRooms = rooms.filter { it.id.isNotBlank() && it.capacity > 0 }
         val cleanProctors = proctors.filter { it.role == UserRole.PROCTOR && it.uid.isNotBlank() }
@@ -49,7 +56,8 @@ internal object SchedulingEngine {
                 slotProctors = slotProctors,
                 selectRooms = selectRooms,
                 slotOffsets = slotOffsets,
-                maxSlot = (cleanCourses.size * 3).coerceAtLeast(16)
+                examDays = allowedExamDays,
+                maxSlot = maxSlot
             )
 
             if (plan == null) {
@@ -66,7 +74,7 @@ internal object SchedulingEngine {
             exams += Exam(
                 id = "${algorithmName.lowercase().replace(" ", "_")}_${course.id}_${plan.slotIndex}",
                 courseId = course.id,
-                date = slotStart(plan.slotIndex, slotOffsets),
+                date = slotStart(plan.slotIndex, slotOffsets, allowedExamDays),
                 slotId = (plan.slotIndex % slotsPerDay) + 1,
                 slotLabel = normalizedSlotTimes[plan.slotIndex % slotsPerDay],
                 assignments = plan.rooms.zip(plan.proctors).map { (room, proctor) ->
@@ -81,6 +89,7 @@ internal object SchedulingEngine {
         val penalty = metrics.unscheduledCourses +
             metrics.semesterConflicts +
             metrics.dailySemesterLimitWarnings +
+            metrics.roomConflicts +
             metrics.capacityFailures +
             metrics.proctorConflicts +
             metrics.excuseConflicts +
@@ -100,9 +109,14 @@ internal object SchedulingEngine {
     }
 
     fun slotStart(slotIndex: Int, slotOffsets: List<Long>): Long {
+        return slotStart(slotIndex, slotOffsets, emptyList())
+    }
+
+    private fun slotStart(slotIndex: Int, slotOffsets: List<Long>, examDays: List<Long>): Long {
         val day = slotIndex / slotOffsets.size
         val slot = slotIndex % slotOffsets.size
-        return firstExamDay + day * dayMillis + slotOffsets[slot]
+        val dayStart = examDays.getOrNull(day) ?: firstExamDay + day * dayMillis
+        return dayStart + slotOffsets[slot]
     }
 
     private fun findPlan(
@@ -114,6 +128,7 @@ internal object SchedulingEngine {
         slotProctors: Map<Int, Set<String>>,
         selectRooms: (target: Int, rooms: List<Room>) -> List<Room>,
         slotOffsets: List<Long>,
+        examDays: List<Long>,
         maxSlot: Int
     ): SlotPlan? {
         for (slot in 0 until maxSlot) {
@@ -131,12 +146,12 @@ internal object SchedulingEngine {
                     .filter { candidate ->
                             candidate.uid !in selectedProctors.map { it.uid } &&
                                 slotProctors[slot]?.contains(candidate.uid) != true &&
-                                isAvailable(candidate, slot, slotProctors, slotOffsets)
+                                isAvailable(candidate, slot, slotProctors, slotOffsets, examDays)
                     }
                     .sortedWith(
                         compareBy<User>(
-                            { if (it.deptId.equals(course.departmentId, ignoreCase = true)) 0 else 1 },
                             { proctorLoad[it.uid] ?: 0 },
+                            { proctorPoolPriority(it, course.departmentId) },
                             { it.name }
                         )
                     )
@@ -167,13 +182,21 @@ internal object SchedulingEngine {
         return selectRooms(target, freeRooms)
     }
 
-    private fun isAvailable(proctor: User, slot: Int, slotProctors: Map<Int, Set<String>>, slotOffsets: List<Long>): Boolean {
-        val start = slotStart(slot, slotOffsets)
+    private fun isAvailable(
+        proctor: User,
+        slot: Int,
+        slotProctors: Map<Int, Set<String>>,
+        slotOffsets: List<Long>,
+        examDays: List<Long>
+    ): Boolean {
+        val start = slotStart(slot, slotOffsets, examDays)
         val hasExcuse = proctor.excuses.any { start in it.start..it.end }
         if (hasExcuse) return false
 
         val previousThree = (1..3).all { offset ->
-            slotProctors[slot - offset]?.contains(proctor.uid) == true
+            val previousSlot = slot - offset
+            previousSlot >= (slot / slotOffsets.size) * slotOffsets.size &&
+                slotProctors[previousSlot]?.contains(proctor.uid) == true
         }
         return !previousThree
     }
@@ -197,6 +220,7 @@ internal object SchedulingEngine {
         val proctorsById = proctors.associateBy { it.uid }
         var semesterConflicts = 0
         var dailySemesterLimitWarnings = 0
+        var roomConflicts = 0
         var capacityFailures = 0
         var proctorConflicts = 0
         var excuseConflicts = 0
@@ -207,7 +231,7 @@ internal object SchedulingEngine {
             semesterConflicts += semesters.size - semesters.toSet().size
 
             val roomsInSlot = sameSlot.flatMap { it.assignments.map { assignment -> assignment.roomId } }
-            proctorConflicts += roomsInSlot.size - roomsInSlot.toSet().size
+            roomConflicts += roomsInSlot.size - roomsInSlot.toSet().size
 
             val proctorsInSlot = sameSlot.flatMap { it.assignments.map { assignment -> assignment.proctorId } }
             proctorConflicts += proctorsInSlot.size - proctorsInSlot.toSet().size
@@ -227,19 +251,20 @@ internal object SchedulingEngine {
         }
 
         val byDayAndSemester = exams.groupBy { exam ->
-            val day = ((exam.date - firstExamDay) / dayMillis).toInt().coerceAtLeast(0)
             val semester = coursesById[exam.courseId]?.semester ?: -1
-            day to semester
+            localEpochDay(exam.date) to semester
         }
         dailySemesterLimitWarnings = byDayAndSemester.values.count { it.size > 2 }
 
         proctors.forEach { proctor ->
-            val proctorSlots = exams
+            val proctorSlotsByDay = exams
                 .filter { exam -> exam.assignments.any { it.proctorId == proctor.uid } }
-                .map { slotIndexFromExam(it, slotsPerDay = exams.maxOfOrNull { candidate -> candidate.slotId }?.coerceAtLeast(1) ?: 1) }
-                .sorted()
-            proctorSlots.windowed(4).forEach { window ->
-                if (window.last() - window.first() == 3) consecutiveViolations += 1
+                .groupBy { localEpochDay(it.date) }
+                .mapValues { (_, dayExams) -> dayExams.map { (it.slotId - 1).coerceAtLeast(0) }.sorted() }
+            proctorSlotsByDay.values.forEach { proctorSlots ->
+                proctorSlots.windowed(4).forEach { window ->
+                    if (window.last() - window.first() == 3) consecutiveViolations += 1
+                }
             }
         }
 
@@ -256,17 +281,13 @@ internal object SchedulingEngine {
             capacityWaste = (totalCapacity - courses.filter { course -> exams.any { it.courseId == course.id } }.sumOf { it.studentCount }).coerceAtLeast(0),
             semesterConflicts = semesterConflicts,
             dailySemesterLimitWarnings = dailySemesterLimitWarnings,
+            roomConflicts = roomConflicts,
             capacityFailures = capacityFailures,
             proctorConflicts = proctorConflicts,
             excuseConflicts = excuseConflicts,
             consecutiveViolations = consecutiveViolations,
             proctorLoadImbalance = proctorLoadImbalance
         )
-    }
-
-    private fun slotIndexFromExam(exam: Exam, slotsPerDay: Int): Int {
-        val day = ((exam.date - firstExamDay) / dayMillis).toInt().coerceAtLeast(0)
-        return day * slotsPerDay + (exam.slotId - 1).coerceAtLeast(0)
     }
 
     private fun normalizeSlotTimes(slotTimes: List<String>): List<String> {
@@ -285,9 +306,24 @@ internal object SchedulingEngine {
         return ((hour * 60L + minute) - (9 * 60L)).coerceAtLeast(0L) * 60_000L
     }
 
+    private fun proctorPoolPriority(proctor: User, courseDepartmentId: String): Int {
+        val dept = proctor.deptId.trim()
+        return when {
+            dept.equals(courseDepartmentId, ignoreCase = true) -> 0
+            dept.isBlank() || dept.contains("ortak", ignoreCase = true) || dept.contains("havuz", ignoreCase = true) -> 1
+            else -> 2
+        }
+    }
+
+    private fun localEpochDay(timestamp: Long): Long {
+        return (timestamp + turkeyOffsetMillis) / dayMillis
+    }
+
     private data class SlotPlan(
         val slotIndex: Int,
         val rooms: List<Room>,
         val proctors: List<User>
     )
+
+    private const val turkeyOffsetMillis = 3 * 60 * 60 * 1000L
 }

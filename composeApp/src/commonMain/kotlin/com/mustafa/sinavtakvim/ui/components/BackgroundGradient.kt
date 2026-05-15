@@ -11,14 +11,7 @@ import androidx.compose.ui.graphics.Color
 
 @Composable
 fun BackgroundGradient(content: @Composable () -> Unit) {
-    val gradientBrush = Brush.verticalGradient(
-        colors = if (MaterialTheme.colors.isLight) {
-            listOf(Color(0xFFE8ECEF), Color(0xFFF2F4F6))
-        } else {
-            listOf(Color(0xFF0F151A), Color(0xFF161E24))
-        }
-    )
-    Box(modifier = Modifier.fillMaxSize().background(gradientBrush)) {
+    Box(modifier = Modifier.fillMaxSize().background(CorporateColors.Background)) {
         content()
     }
 }

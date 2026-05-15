@@ -85,6 +85,8 @@ class MainScreen(
 
         Scaffold(
             scaffoldState = scaffoldState,
+            drawerBackgroundColor = CorporateColors.Background,
+            drawerElevation = 0.dp,
             drawerContent = {
                 AppDrawer(
                     currentScreen = currentScreen,

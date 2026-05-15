@@ -28,38 +28,18 @@ import androidx.compose.ui.unit.dp
 import com.composeunstyled.Button as UnstyledButton
 
 object CorporateColors {
-    val Primary: Color
-        @Composable get() = MaterialTheme.colors.primary
-
-    val Steel: Color
-        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFF516B7A) else Color(0xFF8AA8BC)
-
-    val Amber: Color
-        @Composable get() = MaterialTheme.colors.secondary
-
-    val Risk: Color
-        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFF9B4E36) else Color(0xFFE08D73)
-
-    val Success: Color
-        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFF2F6B4F) else Color(0xFF70C59B)
-
-    val Background: Color
-        @Composable get() = MaterialTheme.colors.background
-
-    val Surface: Color
-        @Composable get() = MaterialTheme.colors.surface
-
-    val Ink: Color
-        @Composable get() = MaterialTheme.colors.onSurface
-
-    val Muted: Color
-        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFF66727A) else Color(0xFF9FAAB4)
-
-    val Border: Color
-        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFFE0E5E8) else Color(0xFF2A333B)
-
-    val PrimarySoft: Color
-        @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFFE5EEEA) else Color(0xFF20342F)
+    val Primary = Color(0xFF0F172A)     // Slate 900
+    val PrimarySoft = Color(0xFFF1F5F9) // Slate 100
+    val Steel = Color(0xFF475569)       // Slate 600
+    val Secondary = Color(0xFF6366F1)   // Indigo 500
+    val Success = Color(0xFF10B981)     // Emerald 500
+    val Risk = Color(0xFFEF4444)        // Red 500
+    val Amber = Color(0xFFF59E0B)       // Amber 500
+    val Background = Color(0xFFF8FAFC)  // Slate 50
+    val Surface = Color(0xFFFFFFFF)
+    val Border = Color(0xFFE2E8F0)      // Slate 200
+    val Muted = Color(0xFF94A3B8)       // Slate 400
+    val Ink = Color(0xFF0F172A)         // Slate 900
 }
 
 enum class OpsButtonStyle {

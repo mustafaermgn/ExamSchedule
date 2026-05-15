@@ -10,7 +10,8 @@ class DPSolver : ExamSolver {
         courses: List<Course>,
         rooms: List<Room>,
         proctors: List<User>,
-        slotTimes: List<String>
+        slotTimes: List<String>,
+        examDays: List<Long>
     ): SolverResult {
         var result = SolverResult(emptyList(), 0L, 0.0)
         val time = measureTime {
@@ -20,6 +21,7 @@ class DPSolver : ExamSolver {
                 rooms = rooms,
                 proctors = proctors,
                 slotTimes = slotTimes,
+                examDays = examDays,
                 selectRooms = ::findOptimalRooms
             )
         }

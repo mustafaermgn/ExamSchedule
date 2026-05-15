@@ -33,24 +33,16 @@ fun ModernHeader(
     onSettings: () -> Unit = {},
     onMenuClick: () -> Unit = {}
 ) {
-    val headerBrush = Brush.horizontalGradient(
-        colors = if (MaterialTheme.colors.isLight) {
-            listOf(CorporateColors.Primary, Color(0xFF2A6B61))
-        } else {
-            listOf(Color(0xFF254A43), Color(0xFF1E323C))
-        }
-    )
-
     ResponsiveBox(breakpoint = 700.dp) { isWide ->
         val isCompact = !isWide
 
-        Surface(modifier = Modifier.fillMaxWidth(), elevation = 8.dp) {
+        Surface(modifier = Modifier.fillMaxWidth(), elevation = 4.dp) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(headerBrush)
+                    .background(CorporateColors.Primary)
                     .padding(
-                        vertical = if (isCompact) 10.dp else 12.dp,
+                        vertical = 12.dp,
                         horizontal = if (isCompact) 8.dp else 16.dp
                     )
             ) {

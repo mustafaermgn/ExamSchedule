@@ -26,24 +26,24 @@ class ExamRepository {
     private var localExams = mutableListOf<Exam>()
     private var localSlotConfig: SlotConfig? = null
 
-    suspend fun getCourses(): List<Course> {
-        if (localCourses.isNotEmpty()) return localCourses.toList()
+    suspend fun getCourses(forceRefresh: Boolean = false): List<Course> {
+        if (!forceRefresh && localCourses.isNotEmpty()) return localCourses.toList()
         val remote = readCollection<Course>(COLLECTION_COURSES)
         localCourses.clear()
         localCourses.addAll(remote)
         return localCourses.toList()
     }
 
-    suspend fun getRooms(): List<Room> {
-        if (localRooms.isNotEmpty()) return localRooms.toList()
+    suspend fun getRooms(forceRefresh: Boolean = false): List<Room> {
+        if (!forceRefresh && localRooms.isNotEmpty()) return localRooms.toList()
         val remote = readCollection<Room>(COLLECTION_ROOMS)
         localRooms.clear()
         localRooms.addAll(remote)
         return localRooms.toList()
     }
 
-    suspend fun getUsers(): List<User> {
-        if (localUsers.isNotEmpty()) return localUsers.toList()
+    suspend fun getUsers(forceRefresh: Boolean = false): List<User> {
+        if (!forceRefresh && localUsers.isNotEmpty()) return localUsers.toList()
         val remote = readCollection<User>(COLLECTION_USERS)
         localUsers.clear()
         if (remote.isEmpty()) {
@@ -100,9 +100,19 @@ class ExamRepository {
         runCatching { firestore.collection(COLLECTION_COURSES).document(course.id).set(course) }
     }
 
+    suspend fun deleteCourse(courseId: String) {
+        localCourses.removeAll { it.id == courseId }
+        runCatching { firestore.collection(COLLECTION_COURSES).document(courseId).delete() }
+    }
+
     suspend fun addRoom(room: Room) {
         upsertLocal(localRooms, room) { it.id }
         runCatching { firestore.collection(COLLECTION_ROOMS).document(room.id).set(room) }
+    }
+
+    suspend fun deleteRoom(roomId: String) {
+        localRooms.removeAll { it.id == roomId }
+        runCatching { firestore.collection(COLLECTION_ROOMS).document(roomId).delete() }
     }
 
     suspend fun addUser(user: User): Boolean {
