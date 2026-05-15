@@ -26,6 +26,7 @@ data class DateRange(
     val start: Long = 0L,
     val end: Long = 0L,
     val isApproved: Boolean = false,
+    val isRejected: Boolean = false,
     val note: String = ""
 )
 

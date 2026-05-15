@@ -3,15 +3,18 @@ package com.mustafa.sinavtakvim.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.Card
 import androidx.compose.material.Divider
+import androidx.compose.material.Icon
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
@@ -19,8 +22,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.composeunstyled.Button as UnstyledButton
 
 object CorporateColors {
     val Primary: Color
@@ -55,6 +60,66 @@ object CorporateColors {
 
     val PrimarySoft: Color
         @Composable get() = if (MaterialTheme.colors.isLight) Color(0xFFE5EEEA) else Color(0xFF20342F)
+}
+
+enum class OpsButtonStyle {
+    Primary,
+    Secondary,
+    Neutral,
+    Danger,
+    Quiet
+}
+
+@Composable
+fun OpsButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    style: OpsButtonStyle = OpsButtonStyle.Primary
+) {
+    val background = when (style) {
+        OpsButtonStyle.Primary -> CorporateColors.Primary
+        OpsButtonStyle.Secondary -> CorporateColors.Steel
+        OpsButtonStyle.Neutral -> CorporateColors.Surface
+        OpsButtonStyle.Danger -> CorporateColors.Surface
+        OpsButtonStyle.Quiet -> Color.Transparent
+    }
+    val content = when (style) {
+        OpsButtonStyle.Primary,
+        OpsButtonStyle.Secondary -> Color.White
+        OpsButtonStyle.Danger -> CorporateColors.Risk
+        OpsButtonStyle.Quiet -> CorporateColors.Primary
+        OpsButtonStyle.Neutral -> CorporateColors.Ink
+    }
+    val border = when (style) {
+        OpsButtonStyle.Neutral -> CorporateColors.Border
+        OpsButtonStyle.Danger -> CorporateColors.Risk
+        else -> Color.Transparent
+    }
+
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 44.dp),
+        backgroundColor = if (enabled) background else CorporateColors.Border.copy(alpha = 0.55f),
+        contentColor = if (enabled) content else CorporateColors.Muted,
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 11.dp),
+        shape = MaterialTheme.shapes.medium,
+        borderColor = border,
+        borderWidth = if (border == Color.Transparent) 0.dp else 1.dp
+    ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = if (enabled) content else CorporateColors.Muted, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.body2.copy(fontWeight = FontWeight.SemiBold),
+            color = if (enabled) content else CorporateColors.Muted
+        )
+    }
 }
 
 @Composable

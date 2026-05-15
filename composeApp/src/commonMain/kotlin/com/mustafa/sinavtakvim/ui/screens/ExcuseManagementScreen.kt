@@ -39,6 +39,7 @@ class ExcuseManagementScreen : Screen {
 
         val allRequests = users.flatMap { u -> u.excuses.map { u to it } }
             .sortedByDescending { it.second.start }
+        val pendingRequestCount = allRequests.count { !it.second.isApproved && !it.second.isRejected }
 
         ResponsiveBox(Modifier.fillMaxSize(), breakpoint = 800.dp) { isDesktop ->
             Column(
@@ -51,7 +52,7 @@ class ExcuseManagementScreen : Screen {
                     PageHeader(
                         title = "İzin ve Mazeret Yönetimi",
                         subtitle = "Gözetmenlerden gelen talepleri inceleyin ve onaylayın",
-                        trailing = { StatusPill("${allRequests.count { !it.second.isApproved }} Bekleyen", CorporateColors.Amber) }
+                        trailing = { StatusPill("$pendingRequestCount Bekleyen", CorporateColors.Amber) }
                     )
 
                     Spacer(Modifier.height(24.dp))
@@ -77,9 +78,10 @@ class ExcuseManagementScreen : Screen {
                                         }
                                     },
                                     onReject = {
-                                        // For simplicity, rejection currently just sets approved to false (already is)
-                                        // In a real app, we might delete it or have a REJECTED state.
-                                        // Here we'll just keep it as is or show a message.
+                                        scope.launch {
+                                            repository.rejectExcuse(user.uid, excuse.start)
+                                            load()
+                                        }
                                     }
                                 )
                             }
@@ -97,12 +99,27 @@ class ExcuseManagementScreen : Screen {
         onApprove: () -> Unit,
         onReject: () -> Unit
     ) {
+        val isPending = !excuse.isApproved && !excuse.isRejected
+        val statusText = when {
+            excuse.isApproved -> "OnaylandÄ±"
+            excuse.isRejected -> "Reddedildi"
+            else -> "Bekliyor"
+        }
+        val statusColor = when {
+            excuse.isApproved -> CorporateColors.Success
+            excuse.isRejected -> CorporateColors.Risk
+            else -> CorporateColors.Amber
+        }
+
         CorporateCard(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(user.name, style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
                         Spacer(Modifier.width(8.dp))
+                        if (excuse.isRejected) {
+                            StatusPill("Reddedildi", CorporateColors.Risk)
+                        } else
                         StatusPill(
                             if (excuse.isApproved) "Onaylandı" else "Bekliyor",
                             if (excuse.isApproved) CorporateColors.Success else CorporateColors.Amber
@@ -116,7 +133,7 @@ class ExcuseManagementScreen : Screen {
                     Text("Gerekçe: ${excuse.note}", style = MaterialTheme.typography.body2, color = CorporateColors.Ink)
                 }
 
-                if (!excuse.isApproved) {
+                if (isPending) {
                     Row {
                         IconButton(onClick = onApprove) {
                             Icon(Icons.Default.Check, "Onayla", tint = CorporateColors.Success)

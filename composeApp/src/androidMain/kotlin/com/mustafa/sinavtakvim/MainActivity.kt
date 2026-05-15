@@ -18,5 +18,5 @@ class MainActivity : ComponentActivity() {
 @Preview
 @Composable
 fun AppAndroidPreview() {
-    App()
+    com.mustafa.sinavtakvim.ui.previews.AppChromePreview()
 }

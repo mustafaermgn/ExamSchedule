@@ -38,8 +38,9 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
 
         // Excuse form state
         var excuseNote by remember { mutableStateOf("") }
-        var excuseDate by remember { mutableStateOf("") } // Simple string for now
-        var showExcuseSuccess by remember { mutableStateOf(false) }
+        var excuseDate by remember { mutableStateOf("") }
+        var excuseMessage by remember { mutableStateOf("") }
+        var excuseError by remember { mutableStateOf(false) }
 
         suspend fun loadData() {
             val allUsers = repository.getUsers()
@@ -59,6 +60,37 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         val assignedRooms = exams.flatMap { exam ->
             exam.assignments.filter { it.proctorId == proctorId }.mapNotNull { rooms[it.roomId] }
         }.distinctBy { it.id }
+
+        fun submitExcuseRequest() {
+            val start = parseExcuseDateMillis(excuseDate)
+            when {
+                start == null -> {
+                    excuseMessage = "Tarih formatÄ±: 18.05.2026 veya 2026-05-18"
+                    excuseError = true
+                }
+                excuseNote.isBlank() -> {
+                    excuseMessage = "Mazeret aÃ§Ä±klamasÄ± zorunludur."
+                    excuseError = true
+                }
+                else -> {
+                    scope.launch {
+                        repository.submitExcuse(
+                            proctorId,
+                            DateRange(
+                                start = start,
+                                end = start + EXCUSE_DURATION_MILLIS,
+                                note = excuseNote.trim()
+                            )
+                        )
+                        excuseNote = ""
+                        excuseDate = ""
+                        excuseMessage = "Talebiniz yÃ¶neticiye iletildi."
+                        excuseError = false
+                        loadData()
+                    }
+                }
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -87,17 +119,14 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                             courses = courses,
                             rooms = rooms,
                             proctorId = proctorId,
+                            excuses = user?.excuses.orEmpty(),
+                            excuseDate = excuseDate,
+                            onExcuseDateChange = { excuseDate = it },
                             excuseNote = excuseNote,
                             onExcuseNoteChange = { excuseNote = it },
-                            onExcuseSubmit = {
-                                scope.launch {
-                                    repository.submitExcuse(proctorId, DateRange(start = System.currentTimeMillis(), note = excuseNote))
-                                    excuseNote = ""
-                                    showExcuseSuccess = true
-                                    loadData()
-                                }
-                            },
-                            showExcuseSuccess = showExcuseSuccess
+                            onExcuseSubmit = { submitExcuseRequest() },
+                            excuseMessage = excuseMessage,
+                            excuseError = excuseError
                         )
                     } else {
                         MobileProctorLayout(
@@ -107,17 +136,14 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                             courses = courses,
                             rooms = rooms,
                             proctorId = proctorId,
+                            excuses = user?.excuses.orEmpty(),
+                            excuseDate = excuseDate,
+                            onExcuseDateChange = { excuseDate = it },
                             excuseNote = excuseNote,
                             onExcuseNoteChange = { excuseNote = it },
-                            onExcuseSubmit = {
-                                scope.launch {
-                                    repository.submitExcuse(proctorId, DateRange(start = System.currentTimeMillis(), note = excuseNote))
-                                    excuseNote = ""
-                                    showExcuseSuccess = true
-                                    loadData()
-                                }
-                            },
-                            showExcuseSuccess = showExcuseSuccess
+                            onExcuseSubmit = { submitExcuseRequest() },
+                            excuseMessage = excuseMessage,
+                            excuseError = excuseError
                         )
                     }
                 }
@@ -133,10 +159,14 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         courses: Map<String, Course>,
         rooms: Map<String, Room>,
         proctorId: String,
+        excuses: List<DateRange>,
+        excuseDate: String,
+        onExcuseDateChange: (String) -> Unit,
         excuseNote: String,
         onExcuseNoteChange: (String) -> Unit,
         onExcuseSubmit: () -> Unit,
-        showExcuseSuccess: Boolean
+        excuseMessage: String,
+        excuseError: Boolean
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
             // Metrics Row
@@ -176,6 +206,14 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                     SectionTitle("Mazeret Bildir", "Göreve katılamama durumu")
                     CorporateCard(Modifier.fillMaxWidth()) {
                         OutlinedTextField(
+                            value = excuseDate,
+                            onValueChange = onExcuseDateChange,
+                            label = { Text("Tarih (18.05.2026)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedTextField(
                             value = excuseNote,
                             onValueChange = onExcuseNoteChange,
                             label = { Text("Mazeret açıklaması") },
@@ -189,10 +227,14 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                         ) {
                             Text("Mazeret Talebi Gönder", color = Color.White)
                         }
-                        if (showExcuseSuccess) {
+                        if (excuseMessage.isNotBlank()) {
                             Spacer(Modifier.height(8.dp))
+                            if (excuseError) {
+                                StatusPill(excuseMessage, CorporateColors.Risk)
+                            } else
                             StatusPill("Talebiniz yöneticiye iletildi.", CorporateColors.Success)
                         }
+                        ExcuseStatusList(excuses)
                     }
                 }
 
@@ -218,10 +260,14 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         courses: Map<String, Course>,
         rooms: Map<String, Room>,
         proctorId: String,
+        excuses: List<DateRange>,
+        excuseDate: String,
+        onExcuseDateChange: (String) -> Unit,
         excuseNote: String,
         onExcuseNoteChange: (String) -> Unit,
         onExcuseSubmit: () -> Unit,
-        showExcuseSuccess: Boolean
+        excuseMessage: String,
+        excuseError: Boolean
     ) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
@@ -247,6 +293,14 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                 SectionTitle("Mazeret Bildir", "Talepler")
                 CorporateCard(Modifier.fillMaxWidth()) {
                     OutlinedTextField(
+                        value = excuseDate,
+                        onValueChange = onExcuseDateChange,
+                        label = { Text("Tarih (18.05.2026)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
                         value = excuseNote,
                         onValueChange = onExcuseNoteChange,
                         label = { Text("Açıklama") },
@@ -260,10 +314,11 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                     ) {
                         Text("Gönder", color = Color.White)
                     }
-                    if (showExcuseSuccess) {
+                    if (excuseMessage.isNotBlank()) {
                         Spacer(Modifier.height(8.dp))
-                        StatusPill("Talebiniz iletildi.", CorporateColors.Success)
+                        StatusPill(excuseMessage, if (excuseError) CorporateColors.Risk else CorporateColors.Success)
                     }
+                    ExcuseStatusList(excuses)
                 }
             }
             item {
@@ -321,10 +376,72 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
     }
 
     @Composable
+    private fun ExcuseStatusList(excuses: List<DateRange>) {
+        if (excuses.isEmpty()) return
+
+        Spacer(Modifier.height(12.dp))
+        DividerLine()
+        Spacer(Modifier.height(10.dp))
+        SectionTitle("Mazeret Taleplerim", "Yonetici onay durumlari")
+        Spacer(Modifier.height(8.dp))
+        excuses.sortedByDescending { it.start }.take(4).forEach { excuse ->
+            val text = when {
+                excuse.isApproved -> "Onaylandi"
+                excuse.isRejected -> "Reddedildi"
+                else -> "Bekliyor"
+            }
+            val color = when {
+                excuse.isApproved -> CorporateColors.Success
+                excuse.isRejected -> CorporateColors.Risk
+                else -> CorporateColors.Amber
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(examDateLabel(excuse.start), fontWeight = FontWeight.SemiBold, color = CorporateColors.Ink)
+                    Text(excuse.note.ifBlank { "Aciklama yok" }, style = MaterialTheme.typography.caption, color = CorporateColors.Muted)
+                }
+                StatusPill(text, color)
+            }
+        }
+    }
+
+    @Composable
     private fun InfoCell(label: String, value: String) {
         Column {
             Text(label, style = MaterialTheme.typography.caption, color = CorporateColors.Muted)
             Text(value, style = MaterialTheme.typography.body1, fontWeight = FontWeight.Bold)
         }
+    }
+
+    private fun parseExcuseDateMillis(raw: String): Long? {
+        val value = raw.trim()
+        if (value.isBlank()) return null
+
+        val parts = when {
+            value.contains("-") -> value.split("-").mapNotNull { it.toIntOrNull() }.let { parsed ->
+                if (parsed.size == 3) listOf(parsed[2], parsed[1], parsed[0]) else emptyList()
+            }
+            value.contains(".") -> value.split(".").mapNotNull { it.toIntOrNull() }
+            value.contains("/") -> value.split("/").mapNotNull { it.toIntOrNull() }
+            else -> listOfNotNull(value.toIntOrNull(), 5, 2026)
+        }
+        if (parts.size != 3) return null
+
+        val day = parts[0]
+        val month = parts[1]
+        val year = parts[2]
+        if (year != 2026 || month != 5 || day < 5 || day > 31) return null
+
+        return FIRST_EXAM_DAY_MILLIS + (day - 5) * DAY_MILLIS
+    }
+
+    private companion object {
+        const val FIRST_EXAM_DAY_MILLIS = 1_777_960_800_000L
+        const val DAY_MILLIS = 86_400_000L
+        const val EXCUSE_DURATION_MILLIS = 90 * 60 * 1000L
     }
 }

@@ -41,6 +41,11 @@ kotlin {
                 implementation(compose.ui)
             }
         }
+        val androidMain by getting {
+            dependencies {
+                implementation(project.dependencies.platform(libs.firebase.bom))
+            }
+        }
     }
 }
 

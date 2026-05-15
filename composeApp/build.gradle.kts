@@ -47,11 +47,13 @@ kotlin {
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
                 implementation(libs.filekit.compose)
+                implementation(libs.composeunstyled.core)
                 implementation(project(":shared"))
             }
         }
         val androidMain by getting {
             dependencies {
+                implementation(project.dependencies.platform(libs.firebase.bom))
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.koin.android)

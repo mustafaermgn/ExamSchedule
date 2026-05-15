@@ -4,32 +4,13 @@ package com.mustafa.sinavtakvim.ui.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.DropdownMenu
-import androidx.compose.material.DropdownMenuItem
-import androidx.compose.material.Icon
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -49,10 +30,9 @@ fun ModernHeader(
     role: String,
     profileImageUrl: String? = null,
     onLogout: () -> Unit = {},
-    onSettings: () -> Unit = {}
+    onSettings: () -> Unit = {},
+    onMenuClick: () -> Unit = {}
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
     val headerBrush = Brush.horizontalGradient(
         colors = if (MaterialTheme.colors.isLight) {
             listOf(CorporateColors.Primary, Color(0xFF2A6B61))
@@ -70,8 +50,8 @@ fun ModernHeader(
                     .fillMaxWidth()
                     .background(headerBrush)
                     .padding(
-                        vertical = if (isCompact) 10.dp else 16.dp,
-                        horizontal = if (isCompact) 12.dp else 20.dp
+                        vertical = if (isCompact) 10.dp else 12.dp,
+                        horizontal = if (isCompact) 8.dp else 16.dp
                     )
             ) {
                 Row(
@@ -80,17 +60,11 @@ fun ModernHeader(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            color = Color.White.copy(alpha = 0.15f)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("ST", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                            }
+                        IconButton(onClick = onMenuClick) {
+                            Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
                         }
 
-                        Spacer(Modifier.width(if (isCompact) 8.dp else 16.dp))
+                        Spacer(Modifier.width(if (isCompact) 4.dp else 12.dp))
 
                         Column {
                             Text(
@@ -117,7 +91,7 @@ fun ModernHeader(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clickable { menuExpanded = true }
+                                .clickable { onSettings() }
                                 .padding(start = 12.dp)
                         ) {
                             if (!isCompact) {
@@ -164,29 +138,6 @@ fun ModernHeader(
                                         modifier = Modifier.padding(8.dp)
                                     )
                                 }
-                            }
-                        }
-
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                            modifier = Modifier.background(CorporateColors.Surface)
-                        ) {
-                            DropdownMenuItem(onClick = {
-                                menuExpanded = false
-                                onSettings()
-                            }) {
-                                Icon(Icons.Default.Settings, contentDescription = null, tint = CorporateColors.Primary)
-                                Spacer(Modifier.width(12.dp))
-                                Text("Ayarlar", color = CorporateColors.Ink)
-                            }
-                            DropdownMenuItem(onClick = {
-                                menuExpanded = false
-                                onLogout()
-                            }) {
-                                Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = CorporateColors.Risk)
-                                Spacer(Modifier.width(12.dp))
-                                Text("Çıkış Yap", color = CorporateColors.Risk)
                             }
                         }
                     }

@@ -1,6 +1,8 @@
 package com.mustafa.sinavtakvim.shared.data.repository
 
+import com.mustafa.sinavtakvim.shared.models.AdminDataBackup
 import com.mustafa.sinavtakvim.shared.models.Course
+import com.mustafa.sinavtakvim.shared.models.DateRange
 import com.mustafa.sinavtakvim.shared.models.Exam
 import com.mustafa.sinavtakvim.shared.models.LogEntry
 import com.mustafa.sinavtakvim.shared.models.Room
@@ -44,7 +46,12 @@ class ExamRepository {
         if (localUsers.isNotEmpty()) return localUsers.toList()
         val remote = readCollection<User>(COLLECTION_USERS)
         localUsers.clear()
-        localUsers.addAll(remote)
+        if (remote.isEmpty()) {
+            localUsers.add(bootstrapAdminUser())
+            persistBootstrapAdmin()
+        } else {
+            localUsers.addAll(remote)
+        }
         return localUsers.toList()
     }
 
@@ -80,7 +87,9 @@ class ExamRepository {
 
     suspend fun saveSlotConfig(slotConfig: SlotConfig) {
         localSlotConfig = slotConfig
-        firestore.collection(COLLECTION_ADMIN_COMMANDS).document(DOC_SLOT_CONFIG).set(slotConfig)
+        runCatching {
+            firestore.collection(COLLECTION_ADMIN_COMMANDS).document(DOC_SLOT_CONFIG).set(slotConfig)
+        }
     }
 
     @Suppress("unused")
@@ -88,25 +97,31 @@ class ExamRepository {
 
     suspend fun addCourse(course: Course) {
         upsertLocal(localCourses, course) { it.id }
-        firestore.collection(COLLECTION_COURSES).document(course.id).set(course)
+        runCatching { firestore.collection(COLLECTION_COURSES).document(course.id).set(course) }
     }
 
     suspend fun addRoom(room: Room) {
         upsertLocal(localRooms, room) { it.id }
-        firestore.collection(COLLECTION_ROOMS).document(room.id).set(room)
+        runCatching { firestore.collection(COLLECTION_ROOMS).document(room.id).set(room) }
     }
 
-    suspend fun addUser(user: User) {
+    suspend fun addUser(user: User): Boolean {
         upsertLocal(localUsers, user) { it.uid }
-        firestore.collection(COLLECTION_USERS).document(user.uid).set(user)
+        return try {
+            firestore.collection(COLLECTION_USERS).document(user.uid).set(user)
+            true
+        } catch (e: Exception) {
+            println("Add user error: ${e.message}")
+            false
+        }
     }
 
     suspend fun deleteUser(userId: String) {
         localUsers.removeAll { it.uid == userId }
-        firestore.collection(COLLECTION_USERS).document(userId).delete()
+        runCatching { firestore.collection(COLLECTION_USERS).document(userId).delete() }
     }
 
-    suspend fun submitExcuse(userId: String, excuse: com.mustafa.sinavtakvim.shared.models.DateRange) {
+    suspend fun submitExcuse(userId: String, excuse: DateRange) {
         val user = getUsers().find { it.uid == userId } ?: return
         val updated = user.copy(excuses = user.excuses + excuse)
         addUser(updated)
@@ -115,7 +130,15 @@ class ExamRepository {
     suspend fun updateExcuseStatus(userId: String, excuseStart: Long, isApproved: Boolean) {
         val user = getUsers().find { it.uid == userId } ?: return
         val updatedExcuses = user.excuses.map {
-            if (it.start == excuseStart) it.copy(isApproved = isApproved) else it
+            if (it.start == excuseStart) it.copy(isApproved = isApproved, isRejected = false) else it
+        }
+        addUser(user.copy(excuses = updatedExcuses))
+    }
+
+    suspend fun rejectExcuse(userId: String, excuseStart: Long) {
+        val user = getUsers().find { it.uid == userId } ?: return
+        val updatedExcuses = user.excuses.map {
+            if (it.start == excuseStart) it.copy(isApproved = false, isRejected = true) else it
         }
         addUser(user.copy(excuses = updatedExcuses))
     }
@@ -123,20 +146,22 @@ class ExamRepository {
     @Suppress("unused")
     suspend fun writeLog(log: LogEntry) {
         upsertLocal(localLogs, log) { it.id }
-        firestore.collection(COLLECTION_LOGS).document(log.id).set(log)
+        runCatching { firestore.collection(COLLECTION_LOGS).document(log.id).set(log) }
     }
 
     suspend fun saveExams(exams: List<Exam>) {
         localExams = exams.toMutableList()
 
-        val existing = firestore.collection(COLLECTION_EXAMS).get()
-        existing.documents.forEach { it.reference.delete() }
+        runCatching {
+            val existing = firestore.collection(COLLECTION_EXAMS).get()
+            existing.documents.forEach { it.reference.delete() }
 
-        val batch = firestore.batch()
-        exams.forEach { exam ->
-            batch.set(firestore.collection(COLLECTION_EXAMS).document(exam.id), exam)
+            val batch = firestore.batch()
+            exams.forEach { exam ->
+                batch.set(firestore.collection(COLLECTION_EXAMS).document(exam.id), exam)
+            }
+            batch.commit()
         }
-        batch.commit()
     }
 
     suspend fun clearDatabase() {
@@ -165,11 +190,77 @@ class ExamRepository {
         )
 
         collections.forEach { collectionName ->
-            val snapshot = firestore.collection(collectionName).get()
-            snapshot.documents.forEach { it.reference.delete() }
+            clearCollection(collectionName)
         }
 
-        bootstrapAdmin()
+        persistBootstrapAdmin()
+    }
+
+    suspend fun createAdminDataBackup(): AdminDataBackup {
+        val allUsers = getUsers()
+        return AdminDataBackup(
+            courses = getCourses(),
+            students = getStudents(),
+            rooms = getRooms(),
+            proctors = allUsers.filter { it.role == UserRole.PROCTOR }
+        )
+    }
+
+    suspend fun restoreAdminDataBackup(backup: AdminDataBackup) {
+        val admins = getUsers()
+            .filter { it.role == UserRole.ADMIN }
+            .ifEmpty { listOf(bootstrapAdminUser()) }
+            .distinctBy { it.uid }
+
+        val restoredCourses = backup.courses
+            .filter { it.id.isNotBlank() }
+            .distinctBy { it.id }
+        val restoredRooms = backup.rooms
+            .filter { it.id.isNotBlank() }
+            .distinctBy { it.id }
+        val restoredStudents = backup.students
+            .map { student -> student.copy(id = student.id.ifBlank { student.studentNumber }) }
+            .filter { it.id.isNotBlank() }
+            .distinctBy { it.id }
+        val restoredProctors = backup.proctors
+            .filter { it.uid.isNotBlank() }
+            .map { it.copy(role = UserRole.PROCTOR) }
+            .distinctBy { it.uid }
+
+        clearCollection(COLLECTION_COURSES)
+        clearCollection(COLLECTION_ROOMS)
+        clearCollection(COLLECTION_STUDENTS)
+        clearCollection(COLLECTION_EXAMS)
+        clearCollection(COLLECTION_LOGS)
+        clearProctorUsers()
+
+        localCourses.clear()
+        localRooms.clear()
+        localStudents.clear()
+        localExams.clear()
+        localLogs.clear()
+
+        localCourses.addAll(restoredCourses)
+        localRooms.addAll(restoredRooms)
+        localStudents.addAll(restoredStudents)
+
+        localUsers.clear()
+        localUsers.addAll(admins)
+        localUsers.addAll(restoredProctors)
+
+        persistBootstrapAdmin()
+        restoredCourses.forEach { course ->
+            runCatching { firestore.collection(COLLECTION_COURSES).document(course.id).set(course) }
+        }
+        restoredRooms.forEach { room ->
+            runCatching { firestore.collection(COLLECTION_ROOMS).document(room.id).set(room) }
+        }
+        restoredStudents.forEach { student ->
+            runCatching { firestore.collection(COLLECTION_STUDENTS).document(student.id).set(student) }
+        }
+        restoredProctors.forEach { proctor ->
+            runCatching { firestore.collection(COLLECTION_USERS).document(proctor.uid).set(proctor) }
+        }
     }
 
     suspend fun getStudents(): List<Student> {
@@ -182,7 +273,7 @@ class ExamRepository {
 
     suspend fun addStudent(student: Student) {
         upsertLocal(localStudents, student) { it.id }
-        firestore.collection(COLLECTION_STUDENTS).document(student.id).set(student)
+        runCatching { firestore.collection(COLLECTION_STUDENTS).document(student.id).set(student) }
     }
 
     suspend fun enrollStudentsInCourse(courseId: String, students: List<Student>) {
@@ -223,6 +314,42 @@ class ExamRepository {
         if (index >= 0) list[index] = item else list += item
     }
 
+    private fun bootstrapAdminUser(): User {
+        return User(
+            uid = BOOTSTRAP_ADMIN_UID,
+            name = "Sistem Yoneticisi",
+            email = "admin@fakulte.edu.tr",
+            role = UserRole.ADMIN,
+            password = "123456",
+            deptId = "BIL"
+        )
+    }
+
+    private suspend fun persistBootstrapAdmin() {
+        val admin = bootstrapAdminUser()
+        upsertLocal(localUsers, admin) { it.uid }
+        runCatching { firestore.collection(COLLECTION_USERS).document(admin.uid).set(admin) }
+    }
+
+    private suspend fun clearCollection(collectionName: String) {
+        runCatching {
+            val snapshot = firestore.collection(collectionName).get()
+            snapshot.documents.forEach { it.reference.delete() }
+        }
+    }
+
+    private suspend fun clearProctorUsers() {
+        runCatching {
+            val snapshot = firestore.collection(COLLECTION_USERS).get()
+            snapshot.documents.forEach { document ->
+                val user = document.data<User>()
+                if (user.role == UserRole.PROCTOR) {
+                    document.reference.delete()
+                }
+            }
+        }
+    }
+
     private companion object {
         const val COLLECTION_USERS = "Users"
         const val COLLECTION_COURSES = "Courses"
@@ -234,17 +361,4 @@ class ExamRepository {
         const val DOC_SLOT_CONFIG = "slot_config"
         const val BOOTSTRAP_ADMIN_UID = "admin-root"
     }
-
-    private suspend fun bootstrapAdmin() {
-        val admin = User(
-            uid = BOOTSTRAP_ADMIN_UID,
-            name = "Sistem Yöneticisi",
-            email = "admin@fakulte.edu.tr",
-            role = UserRole.ADMIN,
-            password = "123456",
-            deptId = "BIL"
-        )
-        addUser(admin)
-    }
-
 }
