@@ -137,6 +137,21 @@ class ExamRepository {
         addUser(updated)
     }
 
+    suspend fun updateFcmToken(userId: String, token: String): Boolean {
+        val user = getUsers(forceRefresh = true).find { it.uid == userId }
+        if (user == null) {
+            println("FCM token save skipped: user not found for id=$userId")
+            return false
+        }
+        if (user.fcmToken == token) {
+            println("FCM token already current for user: $userId")
+            return true
+        }
+        val saved = addUser(user.copy(fcmToken = token))
+        println("FCM token save result for user $userId: $saved")
+        return saved
+    }
+
     suspend fun updateExcuseStatus(userId: String, excuseStart: Long, isApproved: Boolean) {
         val user = getUsers().find { it.uid == userId } ?: return
         val updatedExcuses = user.excuses.map {

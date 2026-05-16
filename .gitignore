@@ -10,6 +10,8 @@ local.properties
 .externalNativeBuild
 .cxx
 /google-services.json
+/functions/lib
+/functions/node_modules
 .settings
 .project
 .classpath

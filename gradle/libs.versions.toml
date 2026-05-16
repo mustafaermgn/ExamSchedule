@@ -52,6 +52,8 @@ androidx-lifecycle-runtime-desktop = { module = "androidx.lifecycle:lifecycle-ru
 androidx-lifecycle-common = { module = "androidx.lifecycle:lifecycle-common", version.ref = "lifecycle" }
 androidx-lifecycle-common-jvm = { module = "androidx.lifecycle:lifecycle-common-jvm", version.ref = "lifecycle" }
 composeunstyled-core = { module = "com.composables:core", version.ref = "composeunstyled" }
+firebase-messaging = { module = "dev.gitlive:firebase-messaging", version.ref = "firebase-kmp" }
+firebase-messaging-android = { module = "com.google.firebase:firebase-messaging" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

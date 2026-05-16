@@ -69,8 +69,8 @@ class DashboardScreen : Screen {
                 ) {
                     Column(modifier = Modifier.widthIn(max = 1200.dp)) {
                         PageHeader(
-                            title = "Operasyon Paneli",
-                            subtitle = "Akademik dönem: 2026 Bahar",
+                            title = "Yönetim Paneli",
+                            subtitle = "2026 Bahar Akademik Dönemi",
                             trailing = {
                                 StatusPill(
                                     text = if (cleanPlan) "Plan uygun" else "Uyarı var",
@@ -136,10 +136,10 @@ class DashboardScreen : Screen {
         Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
             // Metrics Row
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                MetricCard("Ders", courses.size.toString(), "planlama havuzu", CorporateColors.Primary, Modifier.weight(1f))
-                MetricCard("Salon", rooms.size.toString(), "aktif kapasite", CorporateColors.Steel, Modifier.weight(1f))
-                MetricCard("Sınav", exams.size.toString(), "takvime alınan", CorporateColors.Amber, Modifier.weight(1f))
-                MetricCard("Gözetmen", proctors.size.toString(), "uygun personel", CorporateColors.Risk, Modifier.weight(1f))
+                MetricCard("Ders", courses.size.toString(), accent = CorporateColors.Primary, modifier = Modifier.weight(1f))
+                MetricCard("Salon", rooms.size.toString(), accent = CorporateColors.Steel, modifier = Modifier.weight(1f))
+                MetricCard("Sınav", exams.size.toString(), accent = CorporateColors.Amber, modifier = Modifier.weight(1f))
+                MetricCard("Gözetmen", proctors.size.toString(), accent = CorporateColors.Risk, modifier = Modifier.weight(1f))
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -147,7 +147,7 @@ class DashboardScreen : Screen {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     CorporateCard(Modifier.fillMaxWidth()) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            SectionTitle("Kısıt Sağlığı", "Kapasite ve personel kontrolü", Modifier.weight(1f))
+                            SectionTitle("Kısıt Sağlığı")
                             Text("${plannedStudents}/${assignedCapacity}", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
                         }
                         Spacer(Modifier.height(14.dp))
@@ -160,9 +160,9 @@ class DashboardScreen : Screen {
                             DividerLine()
                             Spacer(Modifier.height(12.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                SmallStat("Motor", it.algorithmName)
-                                SmallStat("Süre", "${it.executionTimeMs} ms")
-                                SmallStat("Doğruluk", "%${(it.accuracy * 100).toInt()}")
+                                SmallStat("Yöntem", if (it.algorithmName.contains("DP")) "Detaylı" else "Hızlı")
+                                SmallStat("Analiz", "${it.executionTimeMs} ms")
+                                SmallStat("Uyumluluk", "%${(it.accuracy * 100).toInt()}")
                             }
                         }
                     }
@@ -174,7 +174,7 @@ class DashboardScreen : Screen {
 
                 // Right Column: Upcoming Sessions
                 Column(Modifier.weight(1f)) {
-                    SectionTitle("Yaklaşan Oturumlar", "İlk dört sınav")
+                    SectionTitle("Yaklaşan Oturumlar")
                     Spacer(Modifier.height(16.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         exams.take(4).forEach { exam ->
@@ -209,20 +209,20 @@ class DashboardScreen : Screen {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricCard("Ders", courses.size.toString(), "havuz", CorporateColors.Primary, Modifier.weight(1f))
-                    MetricCard("Salon", rooms.size.toString(), "kapasite", CorporateColors.Steel, Modifier.weight(1f))
+                    MetricCard("Ders", courses.size.toString(), accent = CorporateColors.Primary, modifier = Modifier.weight(1f))
+                    MetricCard("Salon", rooms.size.toString(), accent = CorporateColors.Steel, modifier = Modifier.weight(1f))
                 }
             }
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricCard("Sınav", exams.size.toString(), "planlanan", CorporateColors.Amber, Modifier.weight(1f))
-                    MetricCard("Gözetmen", proctors.size.toString(), "personel", CorporateColors.Risk, Modifier.weight(1f))
+                    MetricCard("Sınav", exams.size.toString(), accent = CorporateColors.Amber, modifier = Modifier.weight(1f))
+                    MetricCard("Gözetmen", proctors.size.toString(), accent = CorporateColors.Risk, modifier = Modifier.weight(1f))
                 }
             }
             item {
                 CorporateCard(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        SectionTitle("Kısıt Sağlığı", "Genel durum", Modifier.weight(1f))
+                        SectionTitle("Kısıt Sağlığı")
                         Text("${plannedStudents}/${assignedCapacity}", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
                     }
                     Spacer(Modifier.height(14.dp))
@@ -237,7 +237,7 @@ class DashboardScreen : Screen {
                 }
             }
             item {
-                SectionTitle("Yaklaşan Oturumlar", "İlk sınavlar")
+                SectionTitle("Yaklaşan Oturumlar")
             }
             items(exams.take(4)) { exam ->
                 ExamSummaryRow(exam, courseMap, roomMap)

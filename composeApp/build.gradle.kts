@@ -54,6 +54,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(project.dependencies.platform(libs.firebase.bom))
+                implementation(libs.firebase.messaging.android)
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.koin.android)

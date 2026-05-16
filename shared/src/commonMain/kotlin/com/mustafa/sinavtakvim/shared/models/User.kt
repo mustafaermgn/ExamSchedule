@@ -18,6 +18,7 @@ data class User(
     val password: String = "",
     val profileImageUrl: String = "",
     val phone: String = "",
+    val fcmToken: String = "",
     val preferences: Map<String, Boolean> = emptyMap()
 )
 

@@ -93,10 +93,10 @@ class AdminDataScreen : Screen {
                             parseStudentSpreadsheet(file.readBytes(), file.name)
                         }
                         if (result.students.isEmpty()) {
-                            message = "Hata: 0 öğrenci bulundu. " + (result.warnings.firstOrNull() ?: "Dosya formatını kontrol edin.")
+                            message = "Dosya boş veya format hatalı. (Öğrenci No ve Ad Soyad sütunlarını kontrol edin)"
                         } else {
                             repository.enrollStudentsInCourse(courseId, result.students)
-                            message = "${result.students.size} öğrenci başarıyla yüklendi."
+                            message = "${result.students.size} kayıt güncellendi/eklendi."
                             load(true)
                         }
                     } catch (e: Exception) {
@@ -388,10 +388,10 @@ class AdminDataScreen : Screen {
             }
             item {
                 CorporateCard {
-                    Text("Ders Havuzu ve Öğrenci Listeleri", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
+                    SectionTitle("Ders Havuzu")
                     Spacer(Modifier.height(16.dp))
                     if (courses.isEmpty()) {
-                        Text("Henüz ders eklenmemiş.", color = CorporateColors.Muted, modifier = Modifier.padding(vertical = 16.dp))
+                        Text("Henüz ders tanımlanmamış.", color = CorporateColors.Muted, modifier = Modifier.padding(vertical = 16.dp))
                     }
                 }
             }
@@ -521,28 +521,35 @@ class AdminDataScreen : Screen {
 
     @Composable
     private fun ProctorsTab(proctors: List<User>, onManage: () -> Unit) {
+        val navigator = LocalNavigator.currentOrThrow
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CorporateCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                     Column {
-                        Text("Gözetmen Havuzu", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
-                        Text("${proctors.size} kayıtlı gözetmen", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
+                        SectionTitle("Gözetmen Havuzu")
+                        Text("${proctors.size} kayıtlı personel", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
                     }
-                    Button(
-                        onClick = onManage,
-                        colors = ButtonDefaults.buttonColors(CorporateColors.PrimarySoft),
-                        elevation = ButtonDefaults.elevation(0.dp, 0.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.ManageAccounts, null, tint = CorporateColors.Primary, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Yönet", color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { navigator.push(ExcuseManagementScreen()) },
+                            colors = ButtonDefaults.buttonColors(CorporateColors.PrimarySoft),
+                            elevation = ButtonDefaults.elevation(0.dp, 0.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.PendingActions, null, tint = CorporateColors.Primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("İzin Talepleri", color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = onManage,
+                            colors = ButtonDefaults.buttonColors(CorporateColors.PrimarySoft),
+                            elevation = ButtonDefaults.elevation(0.dp, 0.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.ManageAccounts, null, tint = CorporateColors.Primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Yönet", color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
+                        }
                     }
-                }
 
                 Spacer(Modifier.height(16.dp))
 

@@ -36,7 +36,7 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
-                // implementation(libs.firebase.messaging) // Sunucu hatasÄ± (503) nedeniyle geÃ§ici olarak kapatÄ±ldÄ±
+                                // implementation(libs.firebase.messaging) // Sunucu hatası (503) nedeniyle geçici olarak kapatıldı
                 implementation(libs.koin.core)
                 implementation(compose.ui)
             }
@@ -44,6 +44,7 @@ kotlin {
         val androidMain by getting {
             dependencies {
                 implementation(project.dependencies.platform(libs.firebase.bom))
+                implementation(libs.firebase.messaging.android)
             }
         }
     }

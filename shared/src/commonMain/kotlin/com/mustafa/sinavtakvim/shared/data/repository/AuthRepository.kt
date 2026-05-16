@@ -2,6 +2,7 @@ package com.mustafa.sinavtakvim.shared.data.repository
 
 import com.mustafa.sinavtakvim.shared.models.User
 import com.mustafa.sinavtakvim.shared.models.UserRole
+import com.mustafa.sinavtakvim.shared.utils.loginLocalUserWithCredentials
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.FirebaseUser
 import dev.gitlive.firebase.firestore.firestore
@@ -23,6 +24,21 @@ class AuthRepository(private val firebaseAuth: FirebaseAuth?) {
 
         selectedEmail = email.trim()
         selectedRole = role
+
+        if (role == UserRole.PROCTOR) {
+            val localUser = loginLocalUserWithCredentials(selectedEmail, password, role)
+                ?: return Result.failure(IllegalArgumentException("Gözetmen bilgileri doğrulanamadı. E-posta, şifre veya sunucu yetkilerini kontrol edin."))
+
+            return try {
+                firebaseAuth?.signInWithCustomToken(localUser.customToken)
+                    ?: throw IllegalStateException("Firebase Auth bu platformda başlatılamadı.")
+                selectedRole = localUser.role
+                selectedUserId = localUser.uid
+                Result.success(null)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 
         return try {
             val result = firebaseAuth?.signInWithEmailAndPassword(selectedEmail, password)
@@ -86,9 +102,10 @@ class AuthRepository(private val firebaseAuth: FirebaseAuth?) {
     fun currentEmail(): String = selectedEmail
 
     fun currentUserId(): String {
+        if (selectedUserId.isNotBlank()) return selectedUserId
         val firebaseUid = firebaseAuth?.currentUser?.uid
         if (!firebaseUid.isNullOrBlank()) return firebaseUid
-        return selectedUserId
+        return ""
     }
 
     suspend fun logout() {

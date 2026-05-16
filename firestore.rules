@@ -10,9 +10,22 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/Users/$(request.auth.uid)).data.role == "ADMIN";
     }
 
+    function isSameEmailUser() {
+      return signedIn()
+        && request.auth.token.email != null
+        && resource.data.email == request.auth.token.email;
+    }
+
+    function onlyUpdates(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
     match /Users/{userId} {
       allow read: if signedIn();
-      allow create, update, delete: if isAdmin() || request.auth.uid == userId;
+      allow create, delete: if isAdmin() || request.auth.uid == userId;
+      allow update: if isAdmin()
+        || request.auth.uid == userId
+        || (isSameEmailUser() && onlyUpdates(["fcmToken"]));
     }
 
     match /Courses/{courseId} {
