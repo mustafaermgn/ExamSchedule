@@ -16,7 +16,10 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.mustafa.sinavtakvim.MainScreen
+import com.mustafa.sinavtakvim.NotificationRegistrationCredentials
+import com.mustafa.sinavtakvim.registerDeviceForNotifications
 import com.mustafa.sinavtakvim.shared.data.repository.AuthRepository
+import com.mustafa.sinavtakvim.shared.data.repository.ExamRepository
 import com.mustafa.sinavtakvim.shared.models.UserRole
 import com.mustafa.sinavtakvim.ui.components.CorporateColors
 import com.mustafa.sinavtakvim.ui.components.DividerLine
@@ -32,6 +35,7 @@ class LoginScreen : Screen {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val authRepository = koinInject<AuthRepository>()
+        val examRepository = koinInject<ExamRepository>()
         val scope = rememberCoroutineScope()
 
         var email by remember { mutableStateOf("") }
@@ -103,7 +107,13 @@ class LoginScreen : Screen {
                                     val result = authRepository.login(email, password, role)
                                     isLoading = false
                                     if (result.isSuccess) {
-                                        navigator.replaceAll(MainScreen(authRepository.currentRole(), authRepository.currentUserId()))
+                                        val userId = authRepository.currentUserId()
+                                        registerDeviceForNotifications(
+                                            userId = userId,
+                                            examRepository = examRepository,
+                                            credentials = NotificationRegistrationCredentials(email, password, authRepository.currentRole())
+                                        )
+                                        navigator.replaceAll(MainScreen(authRepository.currentRole(), userId))
                                     } else {
                                         message = result.exceptionOrNull()?.message ?: "Giriş başarısız."
                                     }
@@ -136,7 +146,13 @@ class LoginScreen : Screen {
                                 val result = authRepository.login(email, password, role)
                                 isLoading = false
                                 if (result.isSuccess) {
-                                    navigator.replaceAll(MainScreen(authRepository.currentRole(), authRepository.currentUserId()))
+                                    val userId = authRepository.currentUserId()
+                                    registerDeviceForNotifications(
+                                        userId = userId,
+                                        examRepository = examRepository,
+                                        credentials = NotificationRegistrationCredentials(email, password, authRepository.currentRole())
+                                    )
+                                    navigator.replaceAll(MainScreen(authRepository.currentRole(), userId))
                                 } else {
                                     message = result.exceptionOrNull()?.message ?: "Giriş başarısız."
                                 }

@@ -10,3 +10,11 @@ expect fun MapView(
     lng: Double,
     title: String
 )
+
+@Composable
+expect fun LocationPickerMap(
+    modifier: Modifier,
+    latitude: Double?,
+    longitude: Double?,
+    onLocationSelected: (latitude: Double, longitude: Double) -> Unit
+)

@@ -29,3 +29,25 @@ actual fun MapView(
         }
     }
 }
+
+@Composable
+actual fun LocationPickerMap(
+    modifier: Modifier,
+    latitude: Double?,
+    longitude: Double?,
+    onLocationSelected: (latitude: Double, longitude: Double) -> Unit
+) {
+    Box(
+        modifier = modifier.background(Color(0xFFE1E7E2)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+            Text("Harita seçici Android cihazda aktiftir.", style = MaterialTheme.typography.body2, color = Color(0xFF65706A))
+            Text(
+                if (latitude != null && longitude != null) "$latitude, $longitude" else "Konum seçilmedi",
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.primary
+            )
+        }
+    }
+}

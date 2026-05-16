@@ -30,6 +30,8 @@ import com.mustafa.sinavtakvim.shared.data.repository.ExamRepository
 import com.mustafa.sinavtakvim.theme.AppTheme
 import com.mustafa.sinavtakvim.ui.components.*
 import com.mustafa.sinavtakvim.ui.screens.*
+import com.mustafa.sinavtakvim.shared.utils.getFcmToken
+import com.mustafa.sinavtakvim.shared.utils.registerFcmTokenWithCredentials
 import org.koin.compose.koinInject
 
 object ThemeState {
@@ -44,8 +46,13 @@ fun App() {
     val userId = authRepository.currentUserId()
     var user by remember { mutableStateOf<User?>(null) }
     LaunchedEffect(userId) {
-        user = examRepository.getUsers().find { it.uid == userId }
-        ThemeState.darkThemeEnabled = user?.preferences?.get("darkTheme") ?: false
+        if (userId.isNotBlank()) {
+            user = examRepository.getUsers().find { it.uid == userId }
+            ThemeState.darkThemeEnabled = user?.preferences?.get("darkTheme") ?: false
+            
+            // Notification token management
+            registerDeviceForNotifications(userId, examRepository)
+        }
     }
 
     AppTheme(darkTheme = ThemeState.darkThemeEnabled) {
@@ -81,6 +88,13 @@ class MainScreen(
 
         LaunchedEffect(userId) {
             user = examRepository.getUsers().find { it.uid == userId }
+            registerDeviceForNotifications(userId, examRepository)
+        }
+
+        LaunchedEffect(role, currentScreen) {
+            if (role == UserRole.PROCTOR && currentScreen in listOf(NavScreen.DATA, NavScreen.PLANNING, NavScreen.EXCUSES)) {
+                currentScreen = NavScreen.DASHBOARD
+            }
         }
 
         Scaffold(
@@ -90,6 +104,7 @@ class MainScreen(
             drawerContent = {
                 AppDrawer(
                     currentScreen = currentScreen,
+                    role = role,
                     onNavigate = { currentScreen = it },
                     onLogout = {
                         scope.launch {
@@ -152,13 +167,48 @@ class MainScreen(
                         }
                         NavScreen.CALENDAR -> CalendarScreen(role = role, proctorId = if (role == UserRole.PROCTOR) userId else null).Content()
                         NavScreen.MAP -> MapScreen(role = role, proctorId = if (role == UserRole.PROCTOR) userId else null).Content()
-                        NavScreen.DATA -> AdminDataScreen().Content()
-                        NavScreen.PLANNING -> PlanningScreen().Content()
-                        NavScreen.EXCUSES -> ExcuseManagementScreen().Content()
+                        NavScreen.DATA -> if (role == UserRole.ADMIN) AdminDataScreen().Content() else ProctorHomeScreen(userId).Content()
+                        NavScreen.PLANNING -> if (role == UserRole.ADMIN) PlanningScreen().Content() else ProctorHomeScreen(userId).Content()
+                        NavScreen.EXCUSES -> if (role == UserRole.ADMIN) ExcuseManagementScreen().Content() else ProctorHomeScreen(userId).Content()
                         NavScreen.PROFILE -> ProfileScreen(userId, onUserUpdated = { updated -> user = updated }).Content()
                     }
                 }
             }
         }
+    }
+}
+
+internal data class NotificationRegistrationCredentials(
+    val email: String,
+    val password: String,
+    val role: UserRole
+)
+
+internal suspend fun registerDeviceForNotifications(
+    userId: String,
+    examRepository: ExamRepository,
+    credentials: NotificationRegistrationCredentials? = null
+) {
+    if (userId.isBlank()) return
+
+    try {
+        val token = getFcmToken()
+        if (!token.isNullOrBlank()) {
+            val saved = examRepository.updateFcmToken(userId, token)
+            println("FCM token save requested for user $userId: $saved")
+            if (!saved && credentials != null) {
+                val registered = registerFcmTokenWithCredentials(
+                    email = credentials.email,
+                    password = credentials.password,
+                    role = credentials.role.name,
+                    token = token
+                )
+                println("FCM token HTTPS registration requested for user $userId: $registered")
+            }
+        } else {
+            println("FCM token is empty for user: $userId")
+        }
+    } catch (e: Exception) {
+        println("FCM Token error: ${e.message}")
     }
 }

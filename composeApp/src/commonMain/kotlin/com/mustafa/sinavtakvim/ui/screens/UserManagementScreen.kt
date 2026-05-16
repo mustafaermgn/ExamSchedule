@@ -29,6 +29,7 @@ import com.mustafa.sinavtakvim.shared.models.UserRole
 import com.mustafa.sinavtakvim.ui.components.CorporateCard
 import com.mustafa.sinavtakvim.ui.components.CorporateColors
 import com.mustafa.sinavtakvim.ui.components.ResponsiveBox
+import com.mustafa.sinavtakvim.ui.components.SectionTitle
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -90,8 +91,8 @@ class UserManagementScreen : Screen {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column {
-                                    Text("Sistem Kullanıcıları", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
-                                    Text("${users.size} kayıtlı kullanıcı bulundu", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
+                                    SectionTitle("Sistem Kullanıcıları")
+                                    Text("${users.size} kayıtlı personel", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
                                 }
                                 
                                 if (isDesktop) {

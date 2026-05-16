@@ -25,6 +25,8 @@ class ExamRepository {
     private val localLogs = mutableListOf<LogEntry>()
     private var localExams = mutableListOf<Exam>()
     private var localSlotConfig: SlotConfig? = null
+    var lastRoomSaveError: String = ""
+        private set
 
     suspend fun getCourses(forceRefresh: Boolean = false): List<Course> {
         if (!forceRefresh && localCourses.isNotEmpty()) return localCourses.toList()
@@ -105,9 +107,17 @@ class ExamRepository {
         runCatching { firestore.collection(COLLECTION_COURSES).document(courseId).delete() }
     }
 
-    suspend fun addRoom(room: Room) {
+    suspend fun addRoom(room: Room): Boolean {
         upsertLocal(localRooms, room) { it.id }
-        runCatching { firestore.collection(COLLECTION_ROOMS).document(room.id).set(room) }
+        lastRoomSaveError = ""
+        return try {
+            firestore.collection(COLLECTION_ROOMS).document(room.id).set(room)
+            true
+        } catch (e: Exception) {
+            lastRoomSaveError = e.message ?: e::class.simpleName.orEmpty()
+            println("Add room error: $lastRoomSaveError")
+            false
+        }
     }
 
     suspend fun deleteRoom(roomId: String) {
@@ -135,6 +145,21 @@ class ExamRepository {
         val user = getUsers().find { it.uid == userId } ?: return
         val updated = user.copy(excuses = user.excuses + excuse)
         addUser(updated)
+    }
+
+    suspend fun updateFcmToken(userId: String, token: String): Boolean {
+        val user = getUsers(forceRefresh = true).find { it.uid == userId }
+        if (user == null) {
+            println("FCM token save skipped: user not found for id=$userId")
+            return false
+        }
+        if (user.fcmToken == token) {
+            println("FCM token already current for user: $userId")
+            return true
+        }
+        val saved = addUser(user.copy(fcmToken = token))
+        println("FCM token save result for user $userId: $saved")
+        return saved
     }
 
     suspend fun updateExcuseStatus(userId: String, excuseStart: Long, isApproved: Boolean) {

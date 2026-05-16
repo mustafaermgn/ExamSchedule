@@ -111,8 +111,7 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
             Column(modifier = Modifier.widthIn(max = 1200.dp)) {
                 PageHeader(
                     title = "Gözetmen Paneli",
-                    subtitle = "Hoş geldiniz, ${user?.name ?: "Gözetmen"}",
-                    trailing = { StatusPill("${exams.size} Atanmış Görev", CorporateColors.Primary) }
+                    trailing = { StatusPill("${exams.size} Görev", CorporateColors.Primary) }
                 )
 
                 Spacer(Modifier.height(24.dp))
@@ -193,14 +192,14 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
             // Metrics Row
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                MetricCard("Toplam Görev", exams.size.toString(), "bu dönem", CorporateColors.Primary, Modifier.weight(1f))
-                MetricCard("Farklı Salon", assignedRooms.size.toString(), "görev yerleri", CorporateColors.Steel, Modifier.weight(1f))
+                MetricCard("Toplam Görev", exams.size.toString(), accent = CorporateColors.Primary, modifier = Modifier.weight(1f))
+                MetricCard("Farklı Salon", assignedRooms.size.toString(), accent = CorporateColors.Steel, modifier = Modifier.weight(1f))
             }
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 // Left Column: Next Task & Excuse Form
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    SectionTitle("Sıradaki Görev", "En yakın sınav oturumunuz")
+                    SectionTitle("Sıradaki Görev")
                     CorporateCard(Modifier.fillMaxWidth()) {
                         if (nextExam == null) {
                             Text("Bekleyen göreviniz bulunmuyor.", color = CorporateColors.Muted)
@@ -225,7 +224,7 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                         }
                     }
 
-                    SectionTitle("Mazeret Bildir", "Göreve katılamama durumu")
+                    SectionTitle("Mazeret Bildir")
                     CorporateCard(Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = excuseDate,
@@ -279,7 +278,7 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
 
                 // Right Column: All Tasks
                 Column(Modifier.weight(1f)) {
-                    SectionTitle("Görev Listesi", "Tüm dönem programı")
+                    SectionTitle("Görev Listesi")
                     Spacer(Modifier.height(16.dp))
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.heightIn(max = 600.dp)) {
                         items(exams) { exam ->
@@ -314,13 +313,7 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
     ) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricCard("Görev", exams.size.toString(), "adet", CorporateColors.Primary, Modifier.weight(1f))
-                    MetricCard("Salon", assignedRooms.size.toString(), "lokasyon", CorporateColors.Steel, Modifier.weight(1f))
-                }
-            }
-            item {
-                SectionTitle("Sıradaki Görev", "En yakın")
+                SectionTitle("Sıradaki Görev")
                 Spacer(Modifier.height(8.dp))
                 CorporateCard(Modifier.fillMaxWidth()) {
                     if (nextExam == null) {
@@ -333,7 +326,7 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
                 }
             }
             item {
-                SectionTitle("Mazeret Bildir", "Talepler")
+                SectionTitle("Mazeret Bildir")
                 CorporateCard(Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = excuseDate,
@@ -442,7 +435,7 @@ class ProctorHomeScreen(private val proctorId: String) : Screen {
         Spacer(Modifier.height(12.dp))
         DividerLine()
         Spacer(Modifier.height(10.dp))
-        SectionTitle("Mazeret Taleplerim", "Yonetici onay durumlari")
+        SectionTitle("Mazeret Taleplerim")
         Spacer(Modifier.height(8.dp))
         excuses.sortedByDescending { it.start }.take(4).forEach { excuse ->
             val text = when {

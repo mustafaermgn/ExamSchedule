@@ -281,7 +281,7 @@ class PlanningScreen : Screen {
                 colors = ButtonDefaults.buttonColors(CorporateColors.Primary)
             ) {
                 if (busy) CircularProgressIndicator(Modifier.size(24.dp), color = Color.White)
-                else Text("Algoritmaları Çalıştır", color = Color.White, fontWeight = FontWeight.Bold)
+                else Text("Taslak Planlamayı Başlat", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -308,7 +308,7 @@ class PlanningScreen : Screen {
         onApply: () -> Unit
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("2. Algoritma Karşılaştırması", style = MaterialTheme.typography.h2, color = CorporateColors.Ink)
+            Text("2. Planlama Seçenekleri", style = MaterialTheme.typography.h2, color = CorporateColors.Ink)
             
             results.forEachIndexed { index, result ->
                 Surface(
@@ -323,14 +323,14 @@ class PlanningScreen : Screen {
                             RadioButton(selectedIndex == index, onClick = { onSelect(index) })
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(result.algorithmName, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(if (result.algorithmName.contains("DP")) "Dinamik Programlama" else "Sezgisel Programlama", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                 Text(
-                                    "${result.metrics.scheduledCourses} ders planlandı · ${result.metrics.unscheduledCourses} ders planlanamadı",
+                                    "${result.metrics.scheduledCourses} ders planlandı · ${result.metrics.unscheduledCourses} ders atlanmış",
                                     style = MaterialTheme.typography.caption
                                 )
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("%${(result.accuracy * 100).toInt()} Başarı", color = CorporateColors.Success, fontWeight = FontWeight.Bold)
+                                Text("%${(result.accuracy * 100).toInt()} Uyumluluk", color = CorporateColors.Success, fontWeight = FontWeight.Bold)
                                 Text("${result.executionTimeMs} ms", style = MaterialTheme.typography.caption)
                             }
                         }

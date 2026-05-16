@@ -10,6 +10,7 @@ data class Room(
     val floor: Int = 0,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
-    val building: String = "Mühendislik Fakültesi",
+    val mapLink: String = "",
+    val building: String = "Manisa Celal Bayar Üniversitesi Dekanlığı",
     val facilities: List<String> = emptyList()
 )

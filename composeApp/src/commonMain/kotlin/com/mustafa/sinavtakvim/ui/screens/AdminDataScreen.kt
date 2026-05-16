@@ -58,9 +58,9 @@ class AdminDataScreen : Screen {
         var roomName by remember { mutableStateOf("") }
         var roomCapacity by remember { mutableStateOf("") }
         var roomFloor by remember { mutableStateOf("") }
-        var roomBuilding by remember { mutableStateOf("Mühendislik Fakültesi") }
-        var roomLatitude by remember { mutableStateOf("") }
-        var roomLongitude by remember { mutableStateOf("") }
+        var roomBuilding by remember { mutableStateOf("Manisa Celal Bayar Üniversitesi Dekanlığı") }
+        var roomLatitude by remember { mutableStateOf<Double?>(38.611942) }
+        var roomLongitude by remember { mutableStateOf<Double?>(27.378973) }
 
         var selectedCourseId by remember { mutableStateOf("") }
         var editingCourseId by remember { mutableStateOf<String?>(null) }
@@ -93,10 +93,10 @@ class AdminDataScreen : Screen {
                             parseStudentSpreadsheet(file.readBytes(), file.name)
                         }
                         if (result.students.isEmpty()) {
-                            message = "Hata: 0 öğrenci bulundu. " + (result.warnings.firstOrNull() ?: "Dosya formatını kontrol edin.")
+                            message = "Dosya boş veya format hatalı. (Öğrenci No ve Ad Soyad sütunlarını kontrol edin)"
                         } else {
                             repository.enrollStudentsInCourse(courseId, result.students)
-                            message = "${result.students.size} öğrenci başarıyla yüklendi."
+                            message = "${result.students.size} kayıt güncellendi/eklendi."
                             load(true)
                         }
                     } catch (e: Exception) {
@@ -231,9 +231,11 @@ class AdminDataScreen : Screen {
                         building = roomBuilding,
                         onBuildingChange = { roomBuilding = it },
                         latitude = roomLatitude,
-                        onLatitudeChange = { roomLatitude = it },
                         longitude = roomLongitude,
-                        onLongitudeChange = { roomLongitude = it },
+                        onLocationSelected = { latitude, longitude ->
+                            roomLatitude = latitude
+                            roomLongitude = longitude
+                        },
                         isEditing = editingRoomId != null,
                         onEditRoom = { room ->
                             editingRoomId = room.id
@@ -241,8 +243,8 @@ class AdminDataScreen : Screen {
                             roomCapacity = room.capacity.toString()
                             roomFloor = room.floor.toString()
                             roomBuilding = room.building
-                            roomLatitude = room.latitude.takeIf { it != 0.0 }?.toString().orEmpty()
-                            roomLongitude = room.longitude.takeIf { it != 0.0 }?.toString().orEmpty()
+                            roomLatitude = room.latitude.takeIf { it != 0.0 }
+                            roomLongitude = room.longitude.takeIf { it != 0.0 }
                         },
                         onDeleteRoom = { id ->
                             scope.launch {
@@ -254,25 +256,50 @@ class AdminDataScreen : Screen {
                         onCancelEdit = {
                             editingRoomId = null
                             roomName = ""; roomCapacity = ""; roomFloor = ""
-                            roomBuilding = "Mühendislik Fakültesi"; roomLatitude = ""; roomLongitude = ""
+                            roomBuilding = "Manisa Celal Bayar Üniversitesi Dekanlığı"; roomLatitude = 38.611942; roomLongitude = 27.378973
                         },
                         onSaveRoom = {
                             scope.launch {
+                                val cleanRoomName = roomName.trim()
+                                if (cleanRoomName.isBlank()) {
+                                    message = "Salon adı zorunludur."
+                                    return@launch
+                                }
+
+                                val selectedLatitude = roomLatitude
+                                val selectedLongitude = roomLongitude
+                                if (selectedLatitude == null || selectedLongitude == null) {
+                                    message = "Haritadan salon konumunu seçin."
+                                    return@launch
+                                }
+
+                                val roomId = editingRoomId ?: cleanRoomName.toSafeDocumentId()
+                                if (roomId.isBlank()) {
+                                    message = "Salon adı geçerli bir kayıt anahtarı oluşturamadı."
+                                    return@launch
+                                }
+
                                 val room = Room(
-                                    id = editingRoomId ?: roomName,
-                                    name = roomName,
+                                    id = roomId,
+                                    name = cleanRoomName,
                                     capacity = roomCapacity.toIntOrNull() ?: 30,
                                     floor = roomFloor.toIntOrNull() ?: 0,
-                                    latitude = roomLatitude.replace(',', '.').toDoubleOrNull() ?: 0.0,
-                                    longitude = roomLongitude.replace(',', '.').toDoubleOrNull() ?: 0.0,
-                                    building = roomBuilding.ifBlank { "Mühendislik Fakültesi" }
+                                    latitude = selectedLatitude,
+                                    longitude = selectedLongitude,
+                                    mapLink = "https://www.google.com/maps?q=$selectedLatitude,$selectedLongitude",
+                                    building = roomBuilding.ifBlank { "Manisa Celal Bayar Üniversitesi Dekanlığı" }
                                 )
-                                repository.addRoom(room)
+                                val saved = repository.addRoom(room)
+                                if (!saved) {
+                                    val detail = repository.lastRoomSaveError.ifBlank { "Firebase bağlantısı, yetki veya internet durumunu kontrol edin." }
+                                    message = "Salon kaydedilemedi: $detail"
+                                    return@launch
+                                }
                                 load(true)
                                 message = if (editingRoomId != null) "Salon güncellendi." else "Salon eklendi."
                                 editingRoomId = null
                                 roomName = ""; roomCapacity = ""; roomFloor = ""
-                                roomBuilding = "Mühendislik Fakültesi"; roomLatitude = ""; roomLongitude = ""
+                                roomBuilding = "Manisa Celal Bayar Üniversitesi Dekanlığı"; roomLatitude = 38.611942; roomLongitude = 27.378973
                             }
                         }
                     )
@@ -311,6 +338,13 @@ class AdminDataScreen : Screen {
                 }
             }
         }
+    }
+
+    private fun String.toSafeDocumentId(): String {
+        return trim()
+            .replace(Regex("""[\\/]+"""), "-")
+            .replace(Regex("""\s+"""), " ")
+            .take(120)
     }
 
     @Composable
@@ -388,10 +422,10 @@ class AdminDataScreen : Screen {
             }
             item {
                 CorporateCard {
-                    Text("Ders Havuzu ve Öğrenci Listeleri", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
+                    SectionTitle("Ders Havuzu")
                     Spacer(Modifier.height(16.dp))
                     if (courses.isEmpty()) {
-                        Text("Henüz ders eklenmemiş.", color = CorporateColors.Muted, modifier = Modifier.padding(vertical = 16.dp))
+                        Text("Henüz ders tanımlanmamış.", color = CorporateColors.Muted, modifier = Modifier.padding(vertical = 16.dp))
                     }
                 }
             }
@@ -453,8 +487,9 @@ class AdminDataScreen : Screen {
         capacity: String, onCapChange: (String) -> Unit,
         floor: String, onFloorChange: (String) -> Unit,
         building: String, onBuildingChange: (String) -> Unit,
-        latitude: String, onLatitudeChange: (String) -> Unit,
-        longitude: String, onLongitudeChange: (String) -> Unit,
+        latitude: Double?,
+        longitude: Double?,
+        onLocationSelected: (latitude: Double, longitude: Double) -> Unit,
         isEditing: Boolean,
         onEditRoom: (Room) -> Unit,
         onDeleteRoom: (String) -> Unit,
@@ -475,10 +510,25 @@ class AdminDataScreen : Screen {
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(building, onBuildingChange, label = { Text("Bina / Konum") }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(latitude, onLatitudeChange, label = { Text("Enlem") }, modifier = Modifier.weight(1f))
-                        OutlinedTextField(longitude, onLongitudeChange, label = { Text("Boylam") }, modifier = Modifier.weight(1f))
-                    }
+                    Text("Salon Konumu", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
+                    Spacer(Modifier.height(8.dp))
+                    LocationPickerMap(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp),
+                        latitude = latitude,
+                        longitude = longitude,
+                        onLocationSelected = onLocationSelected
+                    )
+                    Text(
+                        if (latitude != null && longitude != null) {
+                            "Konum seçildi. Değiştirmek için haritada yeni noktaya dokunun."
+                        } else {
+                            "Haritada salonun bulunduğu noktaya dokunarak işaretçiyi yerleştirin."
+                        },
+                        style = MaterialTheme.typography.caption,
+                        color = CorporateColors.Muted
+                    )
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (isEditing) {
@@ -521,28 +571,35 @@ class AdminDataScreen : Screen {
 
     @Composable
     private fun ProctorsTab(proctors: List<User>, onManage: () -> Unit) {
+        val navigator = LocalNavigator.currentOrThrow
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CorporateCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                     Column {
-                        Text("Gözetmen Havuzu", style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
-                        Text("${proctors.size} kayıtlı gözetmen", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
+                        SectionTitle("Gözetmen Havuzu")
+                        Text("${proctors.size} kayıtlı personel", style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
                     }
-                    Button(
-                        onClick = onManage,
-                        colors = ButtonDefaults.buttonColors(CorporateColors.PrimarySoft),
-                        elevation = ButtonDefaults.elevation(0.dp, 0.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.ManageAccounts, null, tint = CorporateColors.Primary, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Yönet", color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { navigator.push(ExcuseManagementScreen()) },
+                            colors = ButtonDefaults.buttonColors(CorporateColors.PrimarySoft),
+                            elevation = ButtonDefaults.elevation(0.dp, 0.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.PendingActions, null, tint = CorporateColors.Primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("İzin Talepleri", color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = onManage,
+                            colors = ButtonDefaults.buttonColors(CorporateColors.PrimarySoft),
+                            elevation = ButtonDefaults.elevation(0.dp, 0.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.ManageAccounts, null, tint = CorporateColors.Primary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Yönet", color = CorporateColors.Primary, fontWeight = FontWeight.Bold)
+                        }
                     }
-                }
 
                 Spacer(Modifier.height(16.dp))
 

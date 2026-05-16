@@ -52,14 +52,13 @@ class ExcuseManagementScreen : Screen {
                 Column(modifier = Modifier.widthIn(max = 1200.dp)) {
                     PageHeader(
                         title = "İzin ve Mazeret Yönetimi",
-                        subtitle = "Gözetmenlerden gelen talepleri inceleyin ve onaylayın",
                         trailing = { StatusPill("$pendingRequestCount Bekleyen", CorporateColors.Amber) }
                     )
 
                     Spacer(Modifier.height(24.dp))
 
                     if (isLoading) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = CorporateColors.Primary)
                         }
                     } else if (allRequests.isEmpty()) {
@@ -102,7 +101,7 @@ class ExcuseManagementScreen : Screen {
     ) {
         val isPending = !excuse.isApproved && !excuse.isRejected
         val statusText = when {
-            excuse.isApproved -> "OnaylandÄ±"
+            excuse.isApproved -> "Onaylandı"
             excuse.isRejected -> "Reddedildi"
             else -> "Bekliyor"
         }
@@ -118,13 +117,7 @@ class ExcuseManagementScreen : Screen {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(user.name, style = MaterialTheme.typography.h3, color = CorporateColors.Ink)
                         Spacer(Modifier.width(8.dp))
-                        if (excuse.isRejected) {
-                            StatusPill("Reddedildi", CorporateColors.Risk)
-                        } else
-                        StatusPill(
-                            if (excuse.isApproved) "Onaylandı" else "Bekliyor",
-                            if (excuse.isApproved) CorporateColors.Success else CorporateColors.Amber
-                        )
+                        StatusPill(statusText, statusColor)
                     }
                     Text(user.email, style = MaterialTheme.typography.caption, color = CorporateColors.Muted)
                     Spacer(Modifier.height(12.dp))

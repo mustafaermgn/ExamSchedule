@@ -28,13 +28,13 @@ import androidx.compose.ui.unit.dp
 import com.composeunstyled.Button as UnstyledButton
 
 object CorporateColors {
-    val Primary = Color(0xFF0F172A)     // Slate 900
+    val Primary = Color(0xFF1E293B)     // Slate 800 (Cleaner corporate feel)
     val PrimarySoft = Color(0xFFF1F5F9) // Slate 100
-    val Steel = Color(0xFF475569)       // Slate 600
-    val Secondary = Color(0xFF6366F1)   // Indigo 500
-    val Success = Color(0xFF10B981)     // Emerald 500
-    val Risk = Color(0xFFEF4444)        // Red 500
-    val Amber = Color(0xFFF59E0B)       // Amber 500
+    val Steel = Color(0xFF64748B)       // Slate 500
+    val Secondary = Color(0xFF4F46E5)   // Indigo 600
+    val Success = Color(0xFF059669)     // Emerald 600
+    val Risk = Color(0xFFDC2626)        // Red 600
+    val Amber = Color(0xFFD97706)       // Amber 600
     val Background = Color(0xFFF8FAFC)  // Slate 50
     val Surface = Color(0xFFFFFFFF)
     val Border = Color(0xFFE2E8F0)      // Slate 200
@@ -105,19 +105,21 @@ fun OpsButton(
 @Composable
 fun PageHeader(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.h1, color = CorporateColors.Ink)
-            Spacer(Modifier.height(6.dp))
-            Text(subtitle, style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
+            if (subtitle != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(subtitle, style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
+            }
         }
         if (trailing != null) {
             Spacer(Modifier.width(14.dp))
@@ -162,24 +164,26 @@ fun SectionTitle(
 fun MetricCard(
     title: String,
     value: String,
-    caption: String,
-    accent: Color,
+    caption: String? = null,
+    accent: Color = CorporateColors.Primary,
     modifier: Modifier = Modifier
 ) {
-    CorporateCard(modifier.heightIn(min = 118.dp)) {
+    CorporateCard(modifier.heightIn(min = 100.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
             Surface(
-                modifier = Modifier.width(32.dp).height(4.dp),
+                modifier = Modifier.width(24.dp).height(3.dp),
                 color = accent,
                 shape = MaterialTheme.shapes.small,
                 content = {}
             )
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
         Text(value, style = MaterialTheme.typography.h1, color = CorporateColors.Ink)
-        Spacer(Modifier.height(4.dp))
-        Text(caption, style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
+        if (caption != null) {
+            Spacer(Modifier.height(2.dp))
+            Text(caption, style = MaterialTheme.typography.body2, color = CorporateColors.Muted)
+        }
     }
 }
 

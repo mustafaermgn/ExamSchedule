@@ -1,6 +1,8 @@
 package com.mustafa.sinavtakvim.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -16,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import com.mustafa.sinavtakvim.shared.data.repository.ExamRepository
@@ -62,6 +65,7 @@ class MapScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .then(if (isDesktop) Modifier else Modifier.verticalScroll(rememberScrollState()))
                     .padding(if (isDesktop) 32.dp else 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -69,7 +73,11 @@ class MapScreen(
                     PageHeader(
                         title = if (isProctor) "Görev Salonlarım" else "Kampüs Yerleşim Planı",
                         subtitle = if (isProctor) "Sınav görevlerinizin bulunduğu salonlar" else "Derslik konumları ve doluluk analizi",
-                        trailing = { StatusPill("${rooms.size} Salon Kayıtlı", CorporateColors.Primary) }
+                        trailing = if (isDesktop) {
+                            { StatusPill("${rooms.size} Salon Kayıtlı", CorporateColors.Primary) }
+                        } else {
+                            null
+                        }
                     )
 
                     Spacer(Modifier.height(24.dp))
@@ -184,20 +192,43 @@ class MapScreen(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CorporateCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(selectedRoom.name, style = MaterialTheme.typography.h2)
-                        Text("${selectedRoom.building} · ${selectedRoom.floor}. Kat", style = MaterialTheme.typography.caption)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(
+                            text = selectedRoom.name,
+                            style = MaterialTheme.typography.h2,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${selectedRoom.building} · ${selectedRoom.floor}. Kat",
+                            style = MaterialTheme.typography.caption,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    StatusPill("${selectedRoom.capacity} Kap.", CorporateColors.Primary)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StatusPill("${selectedRoom.capacity} Kapasite", CorporateColors.Primary)
+                        if (!isProctor) {
+                            StatusPill("${rooms.size} Salon", CorporateColors.Steel)
+                        }
+                    }
                 }
             }
 
-            CorporateCard(Modifier.fillMaxWidth().height(250.dp)) {
+            CorporateCard(Modifier.fillMaxWidth().height(220.dp)) {
                 MapView(Modifier.fillMaxSize(), selectedRoom.latitude, selectedRoom.longitude, selectedRoom.name)
             }
 
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(end = 2.dp)
+            ) {
                 items(rooms) { room ->
                     RoomChip(room, selected = room.id == selectedRoom.id, onClick = { onRoomSelect(room) }, isDesktop = false)
                 }
@@ -205,10 +236,30 @@ class MapScreen(
 
             CorporateCard(Modifier.fillMaxWidth()) {
                 SectionTitle("Oturumlar", "Yaklaşan")
-                roomExams.take(2).forEach { exam ->
-                    val course = courses[exam.courseId]
-                    DividerLine(Modifier.padding(vertical = 8.dp))
-                    Text("${course?.code} - ${exam.slotLabel.ifBlank { slotLabel(exam.slotId) }}", style = MaterialTheme.typography.body2)
+                if (roomExams.isEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Bu salon için yaklaşan oturum bulunmuyor.", color = CorporateColors.Muted)
+                } else {
+                    roomExams.take(3).forEach { exam ->
+                        val course = courses[exam.courseId]
+                        DividerLine(Modifier.padding(vertical = 8.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(
+                                text = course?.code ?: "Ders",
+                                style = MaterialTheme.typography.body2,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${examDateLabel(exam.date)} · ${exam.slotLabel.ifBlank { slotLabel(exam.slotId) }}",
+                                style = MaterialTheme.typography.caption,
+                                color = CorporateColors.Muted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -238,8 +289,21 @@ class MapScreen(
             backgroundColor = background
         ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.Center) {
-                Text(room.name, style = MaterialTheme.typography.body1, fontWeight = FontWeight.Bold, color = titleColor)
-                Text("${room.capacity} Kişi", style = MaterialTheme.typography.caption, color = captionColor)
+                Text(
+                    text = room.name,
+                    style = MaterialTheme.typography.body1,
+                    fontWeight = FontWeight.Bold,
+                    color = titleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${room.capacity} Kişi",
+                    style = MaterialTheme.typography.caption,
+                    color = captionColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
