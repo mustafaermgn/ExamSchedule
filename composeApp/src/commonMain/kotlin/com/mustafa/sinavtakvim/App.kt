@@ -91,12 +91,6 @@ class MainScreen(
             registerDeviceForNotifications(userId, examRepository)
         }
 
-        LaunchedEffect(role, currentScreen) {
-            if (role == UserRole.PROCTOR && currentScreen in listOf(NavScreen.DATA, NavScreen.PLANNING, NavScreen.EXCUSES)) {
-                currentScreen = NavScreen.DASHBOARD
-            }
-        }
-
         Scaffold(
             scaffoldState = scaffoldState,
             drawerBackgroundColor = CorporateColors.Background,
@@ -104,7 +98,6 @@ class MainScreen(
             drawerContent = {
                 AppDrawer(
                     currentScreen = currentScreen,
-                    role = role,
                     onNavigate = { currentScreen = it },
                     onLogout = {
                         scope.launch {
@@ -167,9 +160,9 @@ class MainScreen(
                         }
                         NavScreen.CALENDAR -> CalendarScreen(role = role, proctorId = if (role == UserRole.PROCTOR) userId else null).Content()
                         NavScreen.MAP -> MapScreen(role = role, proctorId = if (role == UserRole.PROCTOR) userId else null).Content()
-                        NavScreen.DATA -> if (role == UserRole.ADMIN) AdminDataScreen().Content() else ProctorHomeScreen(userId).Content()
-                        NavScreen.PLANNING -> if (role == UserRole.ADMIN) PlanningScreen().Content() else ProctorHomeScreen(userId).Content()
-                        NavScreen.EXCUSES -> if (role == UserRole.ADMIN) ExcuseManagementScreen().Content() else ProctorHomeScreen(userId).Content()
+                        NavScreen.DATA -> AdminDataScreen().Content()
+                        NavScreen.PLANNING -> PlanningScreen().Content()
+                        NavScreen.EXCUSES -> ExcuseManagementScreen().Content()
                         NavScreen.PROFILE -> ProfileScreen(userId, onUserUpdated = { updated -> user = updated }).Content()
                     }
                 }

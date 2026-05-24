@@ -19,6 +19,16 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
     }
 
+    function isSameEmailUser() {
+      return signedIn()
+        && request.auth.token.email != null
+        && resource.data.email == request.auth.token.email;
+    }
+
+    function onlyUpdates(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
     match /Users/{userId} {
       allow read: if signedIn();
       allow create, delete: if isAdmin() || request.auth.uid == userId;
